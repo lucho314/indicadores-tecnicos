@@ -32,9 +32,6 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copiar configuración personalizada de Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copiar archivo .env
-COPY .env .
-
 # Exponer el puerto 8001
 EXPOSE 8001
 
