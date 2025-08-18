@@ -4,18 +4,29 @@ FROM node:18-alpine AS build
 # Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos necesarios
+# Copiar archivos de configuración
 COPY package.json pnpm-lock.yaml ./
 
 # Instalar dependencias
 RUN npm install -g pnpm && pnpm install
 
-# Copiar el resto del código fuente
-COPY . .
+# Copiar configuración de Vite y TypeScript
+COPY vite.config.ts tsconfig.json tsconfig.node.json ./
+
+# Copiar archivos de configuración de TailwindCSS
+COPY tailwind.config.js postcss.config.mjs components.json ./
+
+# Copiar todo el código fuente
+COPY src/ ./src/
+COPY public/ ./public/
+COPY index.html ./
 
 # Definir variable de entorno para Vite durante la construcción
 ARG VITE_API_URL=http://localhost:8000
 ENV VITE_API_URL=$VITE_API_URL
+
+# Debug: Mostrar estructura de archivos
+RUN ls -la && ls -la src/ && ls -la src/lib/
 
 # Mostrar la variable para debug
 RUN echo "Building with VITE_API_URL: $VITE_API_URL"
