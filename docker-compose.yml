@@ -1,5 +1,4 @@
 services:
-  # Base de datos PostgreSQL
   postgres:
     image: postgres:15-alpine
     environment:
@@ -20,11 +19,12 @@ services:
     networks:
       - app-network
 
-  # API Backend
   api:
-    build: 
+    build:
       context: ./back
       dockerfile: Dockerfile
+    env_file:
+      - /etc/dokploy/env/indicadores-tecnicos.env
     environment:
       - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
       - DB_HOST=postgres
@@ -32,12 +32,7 @@ services:
       - DB_NAME=indicadores_db
       - DB_USER=indicadores_user
       - DB_PASSWORD=indicadores_pass123
-      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
-      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
-      - BYBIT_API_KEY=${BYBIT_API_KEY}
-      - BYBIT_API_SECRET=${BYBIT_API_SECRET}
+      # Las keys sensibles vienen del env_file (no se exponen aquí)
     volumes:
       - ./back/logs:/app/logs
     ports:
@@ -49,17 +44,15 @@ services:
     networks:
       - app-network
 
-  # Scheduler para tareas programadas
   scheduler:
-    build: 
+    build:
       context: ./back
       dockerfile: Dockerfile
+    env_file:
+      - /etc/dokploy/env/indicadores-tecnicos.env
     environment:
       - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
-      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
-      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
+      # El resto (OPENAI, TWELVEDATA, etc.) viene desde env_file
     volumes:
       - ./back/logs:/app/logs
     depends_on:
@@ -69,13 +62,13 @@ services:
     networks:
       - app-network
 
-  # Frontend
   frontend:
     build:
       context: ./front
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        # Usamos el valor del SO; si no está, fallback a la red interna (no localhost)
+        VITE_API_URL: ${VITE_API_URL:-http://api:8000}
     ports:
       - "8001:8001"
     depends_on:
