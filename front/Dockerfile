@@ -4,29 +4,30 @@ FROM node:18-alpine AS build
 # Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de configuración
+# Copiar archivos de configuración primero para aprovechar cache de Docker
 COPY package.json pnpm-lock.yaml ./
 
 # Instalar dependencias
 RUN npm install -g pnpm && pnpm install
 
-# Copiar configuración de Vite y TypeScript
+# Copiar todos los archivos de configuración
 COPY vite.config.ts tsconfig.json tsconfig.node.json ./
-
-# Copiar archivos de configuración de TailwindCSS
 COPY tailwind.config.js postcss.config.mjs components.json ./
-
-# Copiar todo el código fuente
-COPY src/ ./src/
-COPY public/ ./public/
 COPY index.html ./
+
+# Copiar todo el código fuente completo
+COPY src ./src
+COPY public ./public
 
 # Definir variable de entorno para Vite durante la construcción
 ARG VITE_API_URL=http://localhost:8000
 ENV VITE_API_URL=$VITE_API_URL
 
-# Debug: Mostrar estructura de archivos
-RUN ls -la && ls -la src/ && ls -la src/lib/
+# Debug: Verificar que los archivos existen
+RUN echo "=== Contenido del directorio actual ===" && ls -la
+RUN echo "=== Contenido de src/ ===" && ls -la src/
+RUN echo "=== Contenido de src/lib/ ===" && ls -la src/lib/
+RUN echo "=== Verificando archivo utils.ts ===" && cat src/lib/utils.ts
 
 # Mostrar la variable para debug
 RUN echo "Building with VITE_API_URL: $VITE_API_URL"
