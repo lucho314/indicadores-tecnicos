@@ -1,0 +1,94 @@
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: indicadores_db
+      POSTGRES_USER: indicadores_user
+      POSTGRES_PASSWORD: indicadores_pass123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indicadores_user -d indicadores_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplicación principal
+  app:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
+      - API_KEY=${TWELVEDATA_API_KEY}
+      - SYMBOL=${SYMBOL}
+      - INTERVAL=${INTERVAL}
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
+      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
+      - BYBIT_API_KEY=${BYBIT_API_KEY}
+      - BYBIT_API_SECRET=${BYBIT_API_SECRET} 
+    volumes:
+      - ./logs:/app/logs
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "main.py", "--symbol", "BTC/USD", "--json"]
+
+  # Scheduler para ejecutar cada 4 horas
+  scheduler:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
+      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
+    volumes:
+      - ./logs:/app/logs
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "scheduler.py"]
+
+  # API REST
+  api:
+    build: .
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=indicadores_db
+      - DB_USER=indicadores_user
+      - DB_PASSWORD=indicadores_pass123
+      - BYBIT_API_KEY=${BYBIT_API_KEY}
+      - BYBIT_API_SECRET=${BYBIT_API_SECRET}
+    volumes:
+      - ./api:/app/api
+      - ./service:/app/service
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Frontend
+  frontend:
+    build:
+      context: ../front
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "8001:8001"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

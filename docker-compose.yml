@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: indicadores_db
+      POSTGRES_USER: indicadores_user
+      POSTGRES_PASSWORD: indicadores_pass123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./back/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indicadores_user -d indicadores_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # API Backend
+  api:
+    build: 
+      context: ./back
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=indicadores_db
+      - DB_USER=indicadores_user
+      - DB_PASSWORD=indicadores_pass123
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
+      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
+      - BYBIT_API_KEY=${BYBIT_API_KEY}
+      - BYBIT_API_SECRET=${BYBIT_API_SECRET}
+    volumes:
+      - ./back/logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    networks:
+      - app-network
+
+  # Scheduler para tareas programadas
+  scheduler:
+    build: 
+      context: ./back
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WHATSAPP_PHONE=${WHATSAPP_PHONE}
+      - WHATSAPP_APIKEY=${WHATSAPP_APIKEY}
+    volumes:
+      - ./back/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "scheduler.py"]
+    networks:
+      - app-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "8001:8001"
+    depends_on:
+      - api
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
