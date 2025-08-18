@@ -15,9 +15,8 @@ COPY vite.config.ts tsconfig.json tsconfig.node.json ./
 COPY tailwind.config.js postcss.config.mjs components.json ./
 COPY index.html ./
 
-# Copiar todo el código fuente completo
-COPY src ./src
-COPY public ./public
+# Copiar TODO el código fuente de una vez
+COPY . .
 
 # Definir variable de entorno para Vite durante la construcción
 ARG VITE_API_URL=http://localhost:8000
@@ -26,8 +25,9 @@ ENV VITE_API_URL=$VITE_API_URL
 # Debug: Verificar que los archivos existen
 RUN echo "=== Contenido del directorio actual ===" && ls -la
 RUN echo "=== Contenido de src/ ===" && ls -la src/
-RUN echo "=== Contenido de src/lib/ ===" && ls -la src/lib/
-RUN echo "=== Verificando archivo utils.ts ===" && cat src/lib/utils.ts
+RUN echo "=== Contenido de src/lib/ (si existe) ===" && ls -la src/lib/ || echo "src/lib/ no existe"
+RUN echo "=== Buscar archivos utils.ts en todo el directorio ===" && find . -name "utils.ts" -type f
+RUN echo "=== Estructura completa de src ===" && find src -type f | head -20
 
 # Mostrar la variable para debug
 RUN echo "Building with VITE_API_URL: $VITE_API_URL"
