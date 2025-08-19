@@ -12,9 +12,10 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 import logging
+from config import API_KEY
 
 # Configuración
-SECRET_KEY = "your-secret-key-change-in-production"
+SECRET_KEY = API_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
@@ -595,24 +596,24 @@ async def get_stats():
     finally:
         conn.close()
 
-@app.get("/debug/bybit")
-async def debug_bybit():
-    """
-    Endpoint temporal para debugging de credenciales Bybit
-    """
-    try:
-        import os
-        from config import BYBIT_API_KEY, BYBIT_API_SECRET
+# @app.get("/debug/bybit")
+# async def debug_bybit():
+#     """
+#     Endpoint temporal para debugging de credenciales Bybit
+#     """
+#     try:
+#         import os
+#         from config import BYBIT_API_KEY, BYBIT_API_SECRET
         
-        return {
-            "config_api_key": BYBIT_API_KEY[:10] + "..." if BYBIT_API_KEY else None,
-            "config_api_secret": BYBIT_API_SECRET[:10] + "..." if BYBIT_API_SECRET else None,
-            "env_api_key": os.getenv('BYBIT_API_KEY', 'No encontrada')[:10] + "..." if os.getenv('BYBIT_API_KEY') else "No encontrada",
-            "env_api_secret": os.getenv('BYBIT_API_SECRET', 'No encontrada')[:10] + "..." if os.getenv('BYBIT_API_SECRET') else "No encontrada",
-            "bybit_available": BYBIT_AVAILABLE
-        }
-    except Exception as e:
-        return {"error": str(e)}
+#         return {
+#             "config_api_key": BYBIT_API_KEY[:10] + "..." if BYBIT_API_KEY else None,
+#             "config_api_secret": BYBIT_API_SECRET[:10] + "..." if BYBIT_API_SECRET else None,
+#             "env_api_key": os.getenv('BYBIT_API_KEY', 'No encontrada')[:10] + "..." if os.getenv('BYBIT_API_KEY') else "No encontrada",
+#             "env_api_secret": os.getenv('BYBIT_API_SECRET', 'No encontrada')[:10] + "..." if os.getenv('BYBIT_API_SECRET') else "No encontrada",
+#             "bybit_available": BYBIT_AVAILABLE
+#         }
+#     except Exception as e:
+#         return {"error": str(e)}
 
 @app.get("/positions")
 async def get_open_positions():
