@@ -68,7 +68,8 @@ services:
       dockerfile: Dockerfile
       args:
         # Usamos el valor del SO; si no está, fallback a la red interna (no localhost)
-        VITE_API_URL: ${VITE_API_URL:-http://api:8000}
+        VITE_API_URL: http://134.65.253.0:8000
+
     ports:
       - "8001:8001"
     depends_on:
