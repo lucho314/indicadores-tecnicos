@@ -68,6 +68,11 @@ class User(BaseModel):
     is_active: bool
     is_admin: bool
 
+class SeedRequest(BaseModel):
+    password: str
+    username: Optional[str] = "admin"
+    email: Optional[str] = "admin@indicadores.com"
+
 class Indicador(BaseModel):
     id: int
     timestamp: datetime
@@ -204,6 +209,76 @@ async def login(login_data: LoginRequest):
 @app.get("/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@app.post("/seed")
+async def seed_database(seed_data: SeedRequest):
+    """
+    Crear usuario administrador en la base de datos
+    Este endpoint carga los datos iniciales necesarios para el sistema
+    
+    Args:
+        seed_data: Datos para crear el usuario admin (password, username, email)
+    """
+    try:
+        # Conectar a la base de datos
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Crear tabla de usuarios si no existe
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            hashed_password VARCHAR(255) NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_admin BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        
+        # Hashear contraseña para usuario admin
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(seed_data.password.encode('utf-8'), salt).decode('utf-8')
+        
+        # Insertar usuario admin
+        cursor.execute("""
+        INSERT INTO users (username, email, hashed_password, is_active, is_admin) 
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (username) 
+        DO UPDATE SET 
+            hashed_password = EXCLUDED.hashed_password,
+            email = EXCLUDED.email,
+            is_active = EXCLUDED.is_active,
+            is_admin = EXCLUDED.is_admin;
+        """, (seed_data.username, seed_data.email, hashed_password, True, True))
+        
+        connection.commit()
+        
+        logger.info("✅ Usuario administrador creado exitosamente")
+        
+        return {
+            "message": "Database seeded successfully",
+            "users_created": [
+                {
+                    "username": seed_data.username,
+                    "email": seed_data.email, 
+                    "password": seed_data.password,
+                    "is_admin": True
+                }
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error during seeding: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error seeding database: {str(e)}"
+        )
+    finally:
+        if 'connection' in locals():
+            cursor.close()
+            connection.close()
 
 @app.get("/indicadores", response_model=IndicadoresResponse)
 async def get_indicadores(
