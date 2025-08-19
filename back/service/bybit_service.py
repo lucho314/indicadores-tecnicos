@@ -26,7 +26,6 @@ class BybitService:
         self.client = HTTP(
             api_key=api_key,
             api_secret=api_secret,
-            testnet=True,  # Usar testnet
             timeout=10,    # Timeout de 10 segundos
             recv_window=5000  # Ventana de recepción más amplia
         )
