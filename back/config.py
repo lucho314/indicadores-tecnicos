@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Constantes generales
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("TWELVEDATA_API_KEY") 
 SYMBOL = os.getenv("SYMBOL")
 INTERVAL = os.getenv("INTERVAL")
 
