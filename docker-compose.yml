@@ -24,7 +24,7 @@ services:
       context: ./back
       dockerfile: Dockerfile
     env_file:
-      - /etc/dokploy/env/indicadores-tecnicos.env
+       - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
     environment:
       - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
       - DB_HOST=postgres
@@ -49,7 +49,7 @@ services:
       context: ./back
       dockerfile: Dockerfile
     env_file:
-      - /etc/dokploy/env/indicadores-tecnicos.env
+       - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
     environment:
       - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
       # El resto (OPENAI, TWELVEDATA, etc.) viene desde env_file

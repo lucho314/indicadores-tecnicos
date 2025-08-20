@@ -67,3 +67,5 @@ MANIFEST
 # OS
 .DS_Store
 Thumbs.db
+docker-compose.override.yml
+indicadores-tecnicos.env
