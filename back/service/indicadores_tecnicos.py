@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, Tuple
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from config import API_KEY, SYMBOL, INTERVAL  # p.ej. "BTC/USD", "1h"
+from service.bybit_service import BybitService  # Importar el servicio de Bybit
 
 BASE = "https://api.twelvedata.com"
 ENDPOINTS = {
@@ -11,8 +12,7 @@ ENDPOINTS = {
     "macd":   "/macd",
     "sma":    "/sma",
     "adx":    "/adx",
-    "bbands": "/bbands",
-    "price":  "/price",  # Para obtener el precio actual
+    "bbands": "/bbands"
 }
 
 def _build_session(total_retries: int = 3, backoff: float = 0.5) -> requests.Session:
@@ -127,23 +127,8 @@ def obtener_indicadores(symbol: str = SYMBOL or "BTC/USD", interval: str = INTER
     bb_l = _pick_value_at(results["bbands"]["values"], ts, key="lower_band")
 
     # Precio actual - la API de /price devuelve formato diferente: {"price": "value"}
-    close_price = None
-    if "price" in results:
-        price_data = results["price"]
-        if isinstance(price_data, dict):
-            # Formato directo: {"price": "4412.59"}
-            if "price" in price_data:
-                try:
-                    close_price = float(price_data["price"])
-                except (ValueError, TypeError):
-                    close_price = None
-            # Formato con values (por si acaso)
-            elif "values" in price_data and price_data["values"]:
-                close_price = _pick_value_at(price_data["values"], ts, key="close")
-    
-    # Si no hay precio del endpoint /price, usar middle band como aproximación
-    if close_price is None and bb_m is not None:
-        close_price = bb_m
+    bybit_service = BybitService()
+    close_price = bybit_service.get_price(symbol.replace("/", "") + "T")  # Convertir "BTC/USD" a "BTCUSDT"
 
     return {
         "symbol": symbol,

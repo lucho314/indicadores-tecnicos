@@ -709,6 +709,55 @@ async def get_open_positions():
         logger.error(f"💥 Error obteniendo posiciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo posiciones: {str(e)}")
 
+
+@app.get("/price")
+async def get_price(symbol: str):
+    """
+    Obtiene el precio actual de un par de trading.
+    
+    Args:
+        symbol: El símbolo del par (ej: 'BTCUSDT')
+    
+    Returns:
+        Un diccionario con el precio actual o un mensaje de error.
+    """
+    try:
+        logger.info(f"🔍 Endpoint /price llamado con símbolo: {symbol}")
+        
+        if not BYBIT_AVAILABLE:
+            logger.warning("❌ Bybit no disponible, devolviendo respuesta mock")
+            return {
+                "success": False,
+                "symbol": symbol,
+                "price": None,
+                "message": "Servicio Bybit no disponible"
+            }
+        
+        # Crear instancia del servicio Bybit
+        bybit_service = BybitService()
+        
+        # Obtener el precio del par
+        price = bybit_service.get_price(symbol)
+        if price is not None:
+            logger.info(f"✅ Precio obtenido para {symbol}: {price}")
+            return {
+                "success": True,
+                "symbol": symbol,
+                "price": price
+            }
+        else:
+            logger.warning(f"⚠️ No se pudo obtener el precio para {symbol}")
+            return {
+                "success": False,
+                "symbol": symbol,
+                "price": None,
+                "message": f"No se pudo obtener el precio para {symbol}"
+            }
+    except Exception as e:
+        logger.error(f"💥 Error obteniendo precio para {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo precio para {symbol}: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

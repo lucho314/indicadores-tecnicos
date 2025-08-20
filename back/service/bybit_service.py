@@ -2,6 +2,7 @@ from pybit.unified_trading import HTTP
 from config import BYBIT_API_KEY, BYBIT_API_SECRET,APP_ENV
 import os
 import logging
+from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -176,3 +177,47 @@ class BybitService:
         except Exception as e:
             print(f"💥 Error consultando balance: {str(e)}")
             raise Exception(f"Error consultando balance disponible: {str(e)}")
+    
+    def get_price(self, symbol: str) -> Optional[float]:
+        """
+        Obtiene el precio actual de un par de trading.
+
+        Args:
+            symbol: Símbolo del par (ej: 'BTCUSDT')
+
+        Returns:
+            El precio actual como float, o None si ocurre un error.
+        """
+        try:
+            print(f"💹 Consultando precio para {symbol}...")
+            
+            # Llamada a la API de Bybit para obtener el precio
+            response = self.client.get_tickers(
+                category="linear",
+                symbol=symbol
+            )
+            
+            print(f"📋 Respuesta raw para {symbol}: {type(response)} - {response}")
+            
+            # Extraer el precio del resultado
+            if isinstance(response, dict) and response.get('retCode') == 0:
+                result = response.get('result', {})
+                ticker_list = result.get('list', [])
+                
+                # Validar que la lista de tickers no esté vacía
+                if ticker_list and isinstance(ticker_list, list):
+                    ticker = ticker_list[0]  # Tomar el primer resultado
+                    last_price = ticker.get('lastPrice')
+                    
+                    if last_price:
+                        price = float(last_price)
+                        print(f"✅ Precio actual para {symbol}: {price}")
+                        return price
+            
+            print(f"⚠️ No se pudo obtener el precio para {symbol}")
+            return None
+        
+        except Exception as e:
+            print(f"💥 Error consultando precio para {symbol}: {str(e)}")
+            raise Exception(f"Error consultando precio: {str(e)}")
+
