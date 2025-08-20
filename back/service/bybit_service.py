@@ -1,5 +1,5 @@
 from pybit.unified_trading import HTTP
-from config import BYBIT_API_KEY, BYBIT_API_SECRET
+from config import BYBIT_API_KEY, BYBIT_API_SECRET,APP_ENV
 import os
 import logging
 
@@ -22,12 +22,13 @@ class BybitService:
             raise Exception("❌ Credenciales de Bybit no configuradas")
         
         # Configurar cliente con timeout para testnet
-        print("🌐 Configurando cliente para Bybit Testnet...")
+        print(f"🌐 Configurando cliente para Bybit Testnetttt...{APP_ENV}")
         self.client = HTTP(
             api_key=api_key,
             api_secret=api_secret,
             timeout=10,    # Timeout de 10 segundos
-            recv_window=5000  # Ventana de recepción más amplia
+            recv_window=5000,  # Ventana de recepción más amplia
+            testnet=True if APP_ENV == 'development' else False  # Usar testnet en desarrollo
         )
         
         # Verificar que esté usando testnet

@@ -27,6 +27,9 @@ CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY")
 BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
 BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 
+# ambiente 
+APP_ENV = os.getenv("APP_ENV", "development")
+
 # Debug: verificar que las variables se carguen
 print(f"🔍 Config Debug - BYBIT_API_KEY: {'✅ Configurada' if BYBIT_API_KEY else '❌ No encontrada'}")
 print(f"🔍 Config Debug - BYBIT_API_SECRET: {'✅ Configurada' if BYBIT_API_SECRET else '❌ No encontrada'}")
