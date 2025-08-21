@@ -4,9 +4,14 @@ import { Activity, DollarSign } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card"
 import { useStats } from "../hooks/useStats"
 import { formatCurrency } from "../lib/utils"
+import { useBybitTicker } from "@/hooks/useBybitTicker"
+import { useMemo } from "react"
 
 export function OverviewCards() {
   const { stats, loading, error } = useStats()
+  const symbols = useMemo(() => ["BTCUSDT", "ETHUSDT", "BNBUSDT"], []);
+  const prices = useBybitTicker(symbols);
+
 
   if (loading) {
     return (
@@ -41,7 +46,7 @@ export function OverviewCards() {
 
   const statsData = [
     {
-      title: "BTC/USD",
+      title: "BTC/USDT",
       value: formatCurrency(stats.avgBtcPrice),
       change: `${stats.btcPriceChange > 0 ? "+" : ""}${stats.btcPriceChange.toFixed(2)}%`,
       rsi: stats.avgBtcRsi.toFixed(2),
@@ -49,7 +54,7 @@ export function OverviewCards() {
       trend: stats.btcPriceChange > 0 ? "up" : "down",
     },
     {
-      title: "ETH/USD",
+      title: "ETH/USDT",
       value: formatCurrency(stats.avgEthPrice),
       change: `${stats.ethPriceChange > 0 ? "+" : ""}${stats.ethPriceChange.toFixed(2)}%`,
       rsi: stats.avgEthRsi.toFixed(2),
@@ -57,20 +62,14 @@ export function OverviewCards() {
       trend: stats.ethPriceChange > 0 ? "up" : "down",
     },
     {
-      title: "BNB/USD",
+      title: "BNB/USDT",
       value: formatCurrency(stats.avgBnbPrice),
       change: `${stats.bnbPriceChange > 0 ? "+" : ""}${stats.bnbPriceChange.toFixed(2)}%`,
       rsi: stats.avgBnbRsi.toFixed(2),
       icon: DollarSign,
       trend: stats.bnbPriceChange > 0 ? "up" : "down",
     },
-    {
-      title: "Señales Activas",
-      value: stats.llmSignals.toString(),
-      change: `Total símbolos: ${stats.totalSymbols}`,
-      icon: Activity,
-      trend: "up",
-    },
+   
   ]
 
   return (
@@ -84,7 +83,7 @@ export function OverviewCards() {
               <Icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-2xl font-bold">{prices[stat.title.replace("/","")]}</div>
               {stat.rsi && (
                 <div className="text-sm text-muted-foreground mt-1">RSI: {stat.rsi}</div>
               )}

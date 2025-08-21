@@ -34,6 +34,37 @@ api.interceptors.response.use(
   },
 )
 
+
+const mockBybitData: BybitPositionsResponse = {
+  success: true,
+  totalOpenPositions: 1,
+  availableBalance: 0,
+  balanceInfo: {
+    coin: "USDT",
+    walletBalance: 9820.8146816,
+    availableToWithdraw: 0,
+    transferBalance: 0,
+    bonus: 0,
+    equity: 9820.8246816,
+    usdValue: 9821.19787293,
+  },
+  positions: {
+    BTCUSDT: {
+      symbol: "BTCUSDT",
+      side: "Sell",
+      size: 0.002,
+      avgPrice: 135710,
+      markPrice: 135705,
+      unrealisedPnl: 0.01,
+      leverage: "1",
+      positionValue: 271.42,
+    },
+    ETHUSDT: null,
+    BNBUSDT: null,
+  },
+  timestamp: new Date().toISOString(),
+}
+
 export interface IndicatorData {
   id: number
   timestamp: string
@@ -95,6 +126,40 @@ export interface PositionsResponse {
   }
   timestamp: string
   error?: string
+}
+
+export interface BybitPosition {
+  symbol: string
+  side: "Buy" | "Sell"
+  size: number
+  avgPrice: number
+  markPrice: number
+  unrealisedPnl: number
+  leverage: string
+  positionValue: number
+}
+
+export interface BybitBalanceInfo {
+  coin: string
+  walletBalance: number
+  availableToWithdraw: number
+  transferBalance: number
+  bonus: number
+  equity: number
+  usdValue: number
+}
+
+export interface BybitPositionsResponse {
+  success: boolean
+  totalOpenPositions: number
+  availableBalance: number
+  balanceInfo: BybitBalanceInfo
+  positions: {
+    BTCUSDT: BybitPosition | null
+    ETHUSDT: BybitPosition | null
+    BNBUSDT: BybitPosition | null
+  }
+  timestamp: string
 }
 
 // Mock data fallback
@@ -280,5 +345,17 @@ export const indicatorsApi = {
     }
   },
 }
+
+
+export const getBybitPositions = async (): Promise<BybitPositionsResponse> => {
+  try {
+    const response = await api.get("/positions")
+    return response.data
+  } catch (error) {
+    console.warn("Bybit API call failed, using mock data:", error)
+    return mockBybitData
+  }
+}
+
 
 export default api

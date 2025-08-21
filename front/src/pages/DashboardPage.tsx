@@ -8,6 +8,7 @@ import { OverviewCards } from "../components/OverviewCards"
 import { IndicatorsTable } from "../components/IndicatorsTable"
 import { SettingsPanel } from "../components/SettingsPanel"
 import { TradingDashboard } from "../components/charts/TradingDashboard"
+import { BybitBalance } from "@/components/BybitBalance"
 
 export function DashboardPage() {
   const { user, logout } = useAuth()
@@ -19,7 +20,9 @@ export function DashboardPage() {
         return (
           <div className="space-y-6">
             <OverviewCards />
+            <BybitBalance />
           </div>
+          
         )
       case "indicators":
         return <TradingDashboard />
