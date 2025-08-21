@@ -1,7 +1,7 @@
 """
 API REST para consultar indicadores técnicos
 """
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 import logging
+import asyncio
+import json
 from config import API_KEY
 
 # Configuración
@@ -756,6 +758,100 @@ async def get_price(symbol: str):
     except Exception as e:
         logger.error(f"💥 Error obteniendo precio para {symbol}: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo precio para {symbol}: {str(e)}")
+
+
+# Clase para manejar conexiones WebSocket
+class WebSocketManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+    
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+    
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                # Remover conexiones inactivas
+                self.active_connections.remove(connection)
+
+manager = WebSocketManager()
+
+@app.websocket("/ws/positions/{symbol}")
+async def websocket_positions(websocket: WebSocket, symbol: str):
+    """
+    WebSocket para obtener el estado de posiciones en tiempo real desde Bybit.
+    
+    Args:
+        websocket: La conexión WebSocket
+        symbol: El símbolo del par (ej: 'BTCUSDT')
+    """
+    await manager.connect(websocket)
+    logger.info(f"🔌 Cliente conectado al WebSocket para {symbol}")
+    
+    try:
+        if not BYBIT_AVAILABLE:
+            await websocket.send_text(json.dumps({
+                "error": "Servicio Bybit no disponible",
+                "symbol": symbol,
+                "timestamp": datetime.now().isoformat()
+            }))
+            return
+        
+        # Crear instancia del servicio Bybit
+        bybit_service = BybitService()
+        
+        while True:
+            try:
+                # Obtener posición actual
+                position = bybit_service.get_open_position(symbol)
+                
+                # Obtener balance disponible
+                balance = bybit_service.get_available_balance()
+                
+                # Obtener precio actual
+                current_price = bybit_service.get_price(symbol)
+                
+                # Preparar datos para enviar
+                data = {
+                    "symbol": symbol,
+                    "timestamp": datetime.now().isoformat(),
+                    "position": position,
+                    "balance": balance,
+                    "current_price": current_price,
+                    "has_position": position is not None and float(position.get('size', 0)) != 0
+                }
+                
+                # Enviar datos al cliente
+                await websocket.send_text(json.dumps(data, default=str))
+                
+                # Esperar 5 segundos antes de la siguiente actualización
+                await asyncio.sleep(5)
+                
+            except Exception as e:
+                logger.error(f"❌ Error obteniendo datos de Bybit: {e}")
+                error_data = {
+                    "error": f"Error obteniendo datos: {str(e)}",
+                    "symbol": symbol,
+                    "timestamp": datetime.now().isoformat()
+                }
+                await websocket.send_text(json.dumps(error_data))
+                await asyncio.sleep(10)  # Esperar más tiempo en caso de error
+                
+    except WebSocketDisconnect:
+        logger.info(f"🔌 Cliente desconectado del WebSocket para {symbol}")
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"❌ Error en WebSocket: {e}")
+        manager.disconnect(websocket)
 
 
 if __name__ == "__main__":

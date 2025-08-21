@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket - Estado de Posiciones</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .error { background-color: #fff3cd; color: #856404; }
+        .data { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Monitor de Posiciones en Tiempo Real</h1>
+        
+        <div>
+            <input type="text" id="symbolInput" placeholder="Símbolo (ej: BTCUSDT)" value="BTCUSDT">
+            <button onclick="connect()">Conectar</button>
+            <button onclick="disconnect()">Desconectar</button>
+        </div>
+
+        <div id="status" class="status disconnected">Desconectado</div>
+        
+        <div class="data">
+            <h3>📋 Última actualización:</h3>
+            <pre id="data">Esperando datos...</pre>
+        </div>
+        
+        <div class="data">
+            <h3>🔄 Log de eventos:</h3>
+            <pre id="log" style="height: 300px; overflow-y: scroll;"></pre>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        const statusEl = document.getElementById('status');
+        const dataEl = document.getElementById('data');
+        const logEl = document.getElementById('log');
+
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logEl.textContent += `[${timestamp}] ${message}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function connect() {
+            const symbol = document.getElementById('symbolInput').value.trim();
+            if (!symbol) {
+                alert('Por favor ingresa un símbolo');
+                return;
+            }
+
+            if (ws) {
+                ws.close();
+            }
+
+            // Conectar al WebSocket local
+            ws = new WebSocket(`ws://localhost:8000/ws/positions/${symbol}`);
+
+            ws.onopen = function(event) {
+                statusEl.textContent = `Conectado a ${symbol}`;
+                statusEl.className = 'status connected';
+                addLog(`✅ Conectado al WebSocket para ${symbol}`);
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // Mostrar datos formateados
+                    dataEl.textContent = JSON.stringify(data, null, 2);
+                    
+                    // Log resumido
+                    if (data.error) {
+                        addLog(`❌ Error: ${data.error}`);
+                    } else {
+                        const hasPosition = data.has_position ? '✅ Con posición' : '❌ Sin posición';
+                        const price = data.current_price ? `$${data.current_price}` : 'N/A';
+                        addLog(`📊 ${data.symbol} - ${hasPosition} - Precio: ${price}`);
+                    }
+                } catch (e) {
+                    addLog(`❌ Error parseando datos: ${e.message}`);
+                }
+            };
+
+            ws.onclose = function(event) {
+                statusEl.textContent = 'Desconectado';
+                statusEl.className = 'status disconnected';
+                addLog('🔌 Conexión cerrada');
+            };
+
+            ws.onerror = function(error) {
+                statusEl.textContent = 'Error de conexión';
+                statusEl.className = 'status error';
+                addLog(`❌ Error: ${error}`);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                addLog('🔌 Desconectado manualmente');
+            }
+        }
+
+        // Conectar automáticamente al cargar la página
+        window.onload = function() {
+            addLog('🚀 Página cargada - Listo para conectar');
+        };
+
+        // Cerrar conexión al cerrar la página
+        window.onbeforeunload = function() {
+            if (ws) {
+                ws.close();
+            }
+        };
+    </script>
+</body>
+</html>
