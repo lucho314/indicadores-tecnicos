@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from service.indicadores_tecnicos import obtener_indicadores
 from service.llm_analyzer import llamar_llm
 from service.whatsapp_notifier import send_whatsapp_alert
+from service.bybit_service import BybitService
 from database.postgres_db_manager import PostgresIndicadorDB
 
 def main(symbol: Optional[str] = None) -> Dict[str, Any]:
@@ -29,6 +30,22 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
     # Obtener indicadores
     print(f"[{timestamp}] Obteniendo indicadores...")
     data = obtener_indicadores(symbol) if symbol else obtener_indicadores()
+    
+    # Inicializar servicio de Bybit para consultar posiciones
+    bybit_service = None
+    current_position = None
+    try:
+        bybit_service = BybitService()
+        # Convertir símbolo para Bybit (BTC/USD -> BTCUSDT)
+        bybit_symbol = data.get("symbol", "BTC/USD").replace("/", "") + "T"
+        current_position = bybit_service.get_open_position(bybit_symbol)
+        if current_position:
+            print(f"[{timestamp}] ✅ Posición activa encontrada en Bybit: {bybit_symbol}")
+        else:
+            print(f"[{timestamp}] ℹ️ No hay posiciones activas en Bybit para {bybit_symbol}")
+    except Exception as e:
+        print(f"[{timestamp}] ⚠️ Error consultando Bybit: {e}")
+        current_position = None
     
     result = {
         "timestamp": timestamp,
@@ -75,20 +92,32 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
     # Verificar condiciones manejando valores None
     rsi_condition = rsi is not None and rsi < 30
     macd_condition = macd_hist is not None and macd_hist > 0
+    has_position = current_position is not None
     
-    if rsi_condition or macd_condition:
-        print(f"[{timestamp}] CONDICIONES CUMPLIDAS: RSI < 30 o MACD_Hist > 0")
+    # Determinar si llamar al LLM
+    should_call_llm = (rsi_condition or macd_condition) or has_position
+    
+    if should_call_llm:
+        if has_position:
+            print(f"[{timestamp}] POSICIÓN ACTIVA DETECTADA: Llamando LLM para gestión de posición")
+            print(f"[{timestamp}] Posición: {current_position.get('side', 'N/A')} {current_position.get('size', 'N/A')} @ {current_position.get('avgPrice', 'N/A')}")
+        else:
+            print(f"[{timestamp}] CONDICIONES TÉCNICAS CUMPLIDAS: RSI < 30 o MACD_Hist > 0")
+        
         print(f"[{timestamp}] RSI: {rsi}, MACD_Hist: {macd_hist}")
         
         # Construir contexto para LLM
         historical_context = db.build_context_for_llm(data.get("symbol", "N/A"), data)
         
-        # Crear contexto estructurado para el LLM
+        # Crear contexto estructurado para el LLM incluyendo posición actual
         llm_context = {
             "latest": data,
             "historical_summary": historical_context,
             "symbol": data.get("symbol", "N/A"),
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "current_position": current_position,  # Nueva información de posición
+            "has_position": has_position,
+            "bybit_symbol": bybit_symbol if bybit_service else None
         }
         
         # Llamar a LLM con contexto completo
@@ -97,7 +126,10 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
         result.update({
             "conditions_met": True,
             "llm_called": True,
-            "llm_result": llm_result
+            "llm_result": llm_result,
+            "has_position": has_position,
+            "current_position": current_position,
+            "bybit_symbol": bybit_symbol if bybit_service else None
         })
         
         if llm_result.get("llm_called") and not llm_result.get("error"):
@@ -143,8 +175,18 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
         else:
             print(f"[{timestamp}] ERROR en LLM: {llm_result.get('error', 'Unknown')}")
     else:
-        print(f"[{timestamp}] Condiciones no cumplidas. No se llama a LLM.")
+        if has_position:
+            print(f"[{timestamp}] Hay posición activa pero no se pudo llamar al LLM por error en Bybit")
+        else:
+            print(f"[{timestamp}] Condiciones no cumplidas y sin posiciones activas. No se llama a LLM.")
         print(f"[{timestamp}] RSI: {rsi}, MACD_Hist: {macd_hist}")
+        
+        # Agregar información de posición al resultado aunque no se llame al LLM
+        result.update({
+            "has_position": has_position,
+            "current_position": current_position,
+            "bybit_symbol": bybit_symbol if bybit_service else None
+        })
     
     # Limpiar datos antiguos ocasionalmente
     if timestamp.endswith("00:00"):  # Una vez por hora
