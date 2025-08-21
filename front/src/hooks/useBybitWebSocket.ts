@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-
+const API_BASE_URL = import.meta.env.VITE_API_URL  || "http://localhost:8000"
 export interface WebSocketPositionData {
   symbol: string
   timestamp: string
@@ -41,7 +41,7 @@ export const useBybitWebSocket = (symbol: string = "BTCUSDT") => {
     }
 
     try {
-      const wsUrl = `ws://localhost:8000/ws/positions/${symbol}?token=${encodeURIComponent(token)}`
+      const wsUrl = `ws://${API_BASE_URL}/ws/positions/${symbol}?token=${encodeURIComponent(token)}`
       wsRef.current = new WebSocket(wsUrl)
 
       wsRef.current.onopen = () => {
