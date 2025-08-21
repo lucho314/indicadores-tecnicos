@@ -789,13 +789,52 @@ manager = WebSocketManager()
 async def websocket_positions(websocket: WebSocket, symbol: str):
     """
     WebSocket para obtener el estado de posiciones en tiempo real desde Bybit.
+    Requiere autenticación Bearer token.
     
     Args:
         websocket: La conexión WebSocket
         symbol: El símbolo del par (ej: 'BTCUSDT')
     """
-    await manager.connect(websocket)
-    logger.info(f"🔌 Cliente conectado al WebSocket para {symbol}")
+    # Verificar autenticación antes de aceptar la conexión
+    try:
+        # Obtener el token del query parameter o headers
+        token = None
+        
+        # Buscar token en query parameters
+        query_params = dict(websocket.query_params)
+        if "token" in query_params:
+            token = query_params["token"]
+        
+        # Si no hay token en query params, buscar en headers
+        if not token:
+            headers = dict(websocket.headers)
+            auth_header = headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]  # Remover "Bearer "
+        
+        if not token:
+            await websocket.close(code=4001, reason="Token de autenticación requerido")
+            return
+        
+        # Verificar el token
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = payload.get("sub")
+            if not username:
+                await websocket.close(code=4002, reason="Token inválido")
+                return
+        except jwt.PyJWTError:
+            await websocket.close(code=4003, reason="Token inválido o expirado")
+            return
+        
+        # Si llegamos aquí, el token es válido
+        await manager.connect(websocket)
+        logger.info(f"🔌 Cliente autenticado ({username}) conectado al WebSocket para {symbol}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error en autenticación WebSocket: {e}")
+        await websocket.close(code=4000, reason="Error en autenticación")
+        return
     
     try:
         if not BYBIT_AVAILABLE:

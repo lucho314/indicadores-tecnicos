@@ -20,9 +20,12 @@
         <h1>📊 Monitor de Posiciones en Tiempo Real</h1>
         
         <div>
+            <input type="text" id="tokenInput" placeholder="Bearer Token" style="width: 300px;">
+            <br>
             <input type="text" id="symbolInput" placeholder="Símbolo (ej: BTCUSDT)" value="BTCUSDT">
             <button onclick="connect()">Conectar</button>
             <button onclick="disconnect()">Desconectar</button>
+            <button onclick="getToken()">Obtener Token</button>
         </div>
 
         <div id="status" class="status disconnected">Desconectado</div>
@@ -50,10 +53,51 @@
             logEl.scrollTop = logEl.scrollHeight;
         }
 
+        function getToken() {
+            // Obtener token del endpoint de login
+            const username = prompt('Usuario:');
+            const password = prompt('Contraseña:');
+            
+            if (!username || !password) {
+                alert('Usuario y contraseña son requeridos');
+                return;
+            }
+
+            fetch('http://localhost:8000/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.access_token) {
+                    document.getElementById('tokenInput').value = data.access_token;
+                    addLog('✅ Token obtenido exitosamente');
+                } else {
+                    addLog('❌ Error obteniendo token: ' + (data.detail || 'Error desconocido'));
+                }
+            })
+            .catch(error => {
+                addLog('❌ Error en login: ' + error.message);
+            });
+        }
+
         function connect() {
             const symbol = document.getElementById('symbolInput').value.trim();
+            const token = document.getElementById('tokenInput').value.trim();
+            
             if (!symbol) {
                 alert('Por favor ingresa un símbolo');
+                return;
+            }
+            
+            if (!token) {
+                alert('Por favor ingresa un token de autenticación');
                 return;
             }
 
@@ -61,8 +105,8 @@
                 ws.close();
             }
 
-            // Conectar al WebSocket local
-            ws = new WebSocket(`ws://localhost:8000/ws/positions/${symbol}`);
+            // Conectar al WebSocket con token en query parameter
+            ws = new WebSocket(`ws://localhost:8000/ws/positions/${symbol}?token=${token}`);
 
             ws.onopen = function(event) {
                 statusEl.textContent = `Conectado a ${symbol}`;
