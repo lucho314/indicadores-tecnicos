@@ -373,9 +373,21 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
     try:
         bybit_service = BybitService()
         # Convertir símbolo para Bybit (BTC/USD -> BTCUSDT)
-        symbol_base = data.get("symbol", "BTC/USD").replace("/", "")
-        # Solo agregar T si no termina ya en T
-        bybit_symbol = symbol_base if symbol_base.endswith("T") else symbol_base + "T"
+        original_symbol = data.get("symbol", "BTC/USD")
+        print(f"[{timestamp}] 🔍 Símbolo original: '{original_symbol}'")
+        if "/" in original_symbol:
+            # Formato BTC/USD -> BTCUSDT
+            symbol_base = original_symbol.replace("/", "")
+            bybit_symbol = symbol_base + "T"
+            print(f"[{timestamp}] 🔄 Convertido de {original_symbol} a {bybit_symbol}")
+        else:
+            # Ya está en formato BTCUSDT, no agregar T adicional si ya termina en T
+            if original_symbol.endswith("T"):
+                bybit_symbol = original_symbol
+                print(f"[{timestamp}] ✅ Usando símbolo original (ya termina en T): {bybit_symbol}")
+            else:
+                bybit_symbol = original_symbol + "T"
+                print(f"[{timestamp}] 🔄 Agregando T al símbolo: {bybit_symbol}")
         current_position = bybit_service.get_open_position(bybit_symbol)
         if current_position:
             print(f"[{timestamp}] ✅ Posición activa encontrada en Bybit: {bybit_symbol}")
@@ -514,11 +526,41 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
                     "current_position": current_position
                 }
                 
+                # Obtener precio actual en tiempo real de Bybit
+                current_price = indicators.get("price", 0)  # Precio por defecto de indicadores
+                if bybit_service:
+                    try:
+                        # Convertir símbolo para Bybit (BTC/USD -> BTCUSDT)
+                        original_symbol = data.get("symbol", "BTC/USD")
+                        print(f"[{timestamp}] 🔍 Símbolo original para precio: '{original_symbol}'")
+                        if "/" in original_symbol:
+                            # Formato BTC/USD -> BTCUSDT
+                            symbol_base = original_symbol.replace("/", "")
+                            bybit_symbol = symbol_base + "T"
+                            print(f"[{timestamp}] 🔄 Convertido para precio de {original_symbol} a {bybit_symbol}")
+                        else:
+                            # Ya está en formato BTCUSDT, no agregar T adicional si ya termina en T
+                            if original_symbol.endswith("T"):
+                                bybit_symbol = original_symbol
+                                print(f"[{timestamp}] ✅ Usando símbolo original para precio (ya termina en T): {bybit_symbol}")
+                            else:
+                                bybit_symbol = original_symbol + "T"
+                                print(f"[{timestamp}] 🔄 Agregando T al símbolo para precio: {bybit_symbol}")
+                        real_time_price = bybit_service.get_price(bybit_symbol)
+                        if real_time_price:
+                            current_price = real_time_price
+                            print(f"[{timestamp}] 💰 Precio actual en tiempo real: ${current_price}")
+                        else:
+                            print(f"[{timestamp}] ⚠️ No se pudo obtener precio en tiempo real, usando precio de indicadores: ${current_price}")
+                    except Exception as e:
+                        print(f"[{timestamp}] ❌ Error obteniendo precio en tiempo real: {e}")
+                        print(f"[{timestamp}] 🔄 Usando precio de indicadores: ${current_price}")
+                
                 strategy_id = save_llm_strategy(
                     strategy_service=strategy_service,
                     llm_result=llm_result,
                     symbol=data.get("symbol", "N/A"),
-                    current_price=indicators.get("price", 0),
+                    current_price=current_price,
                     market_conditions=market_conditions
                 )
             
