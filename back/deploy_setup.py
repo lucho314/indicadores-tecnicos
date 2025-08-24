@@ -43,6 +43,24 @@ def main():
                 
         print("✅ Tabla 'klines' configurada exitosamente")
         
+        # 2.1. Ejecutar migración de tabla trading_strategies
+        print("\n2️⃣.1️⃣ Verificando y creando tabla 'trading_strategies'...")
+        script_path = os.path.join(os.path.dirname(__file__), "database", "create_trading_strategies_table.sql")
+        
+        if not os.path.exists(script_path):
+            print(f"❌ Script de migración no encontrado: {script_path}")
+            return False
+            
+        with open(script_path, 'r', encoding='utf-8') as f:
+            sql_script = f.read()
+            
+        with db_manager.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_script)
+                conn.commit()
+                
+        print("✅ Tabla 'trading_strategies' configurada exitosamente")
+        
         # 3. Verificar tablas existentes
         print("\n3️⃣ Verificando tablas en base de datos...")
         with db_manager.get_connection() as conn:
