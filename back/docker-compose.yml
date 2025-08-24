@@ -66,6 +66,7 @@ services:
       - DB_NAME=indicadores_db
       - DB_USER=indicadores_user
       - DB_PASSWORD=indicadores_pass123
+      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
       - BYBIT_API_KEY=${BYBIT_API_KEY}
       - BYBIT_API_SECRET=${BYBIT_API_SECRET}
     volumes:

@@ -1,0 +1,12 @@
+
+# Script de respaldo - Sistema anterior de indicadores
+# Para usar el sistema anterior, cambia la importación en tu código:
+
+# En lugar de:
+# from service.indicadores_tecnicos import obtener_indicadores
+
+# Usa:
+# from service.indicadores_tecnicos import obtener_indicadores_legacy as obtener_indicadores
+
+# O ejecuta directamente:
+# python -c "from service.indicadores_tecnicos import obtener_indicadores_legacy; print(obtener_indicadores_legacy())"

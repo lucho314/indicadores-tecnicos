@@ -194,7 +194,13 @@ class IndicadorDB:
                 "macd_signal": latest_data.get("macd_signal"),
                 "macd_hist": latest_data.get("macd_hist"),
                 "sma": latest_data.get("sma"),
+                "sma200": latest_data.get("sma200"),
+                "ema20": latest_data.get("ema20"),
+                "ema200": latest_data.get("ema200"),
                 "adx": latest_data.get("adx"),
+                "atr14": latest_data.get("atr14"),
+                "obv": latest_data.get("obv"),
+                "volume": latest_data.get("volume"),
                 "bb_u": latest_data.get("bb_upper"),
                 "bb_m": latest_data.get("bb_middle"),
                 "bb_l": latest_data.get("bb_lower")

@@ -37,11 +37,24 @@ except ImportError as e:
     logger.warning(f"❌ BybitService no disponible: {e}")
     BYBIT_AVAILABLE = False
 
+# Importar rutas de trading strategies
+try:
+    from .trading_strategies_api import router as trading_strategies_router
+    logger.info("✅ Trading strategies API importado correctamente")
+except ImportError as e:
+    logger.warning(f"❌ Trading strategies API no disponible: {e}")
+    trading_strategies_router = None
+
 app = FastAPI(
     title="Indicadores Técnicos API",
     description="API para consultar indicadores técnicos de criptomonedas",
     version="1.0.0"
 )
+
+# Registrar rutas de trading strategies
+if trading_strategies_router:
+    app.include_router(trading_strategies_router, prefix="/trading-strategies", tags=["Trading Strategies"])
+    logger.info("✅ Rutas de trading strategies registradas")
 
 # CORS
 app.add_middleware(

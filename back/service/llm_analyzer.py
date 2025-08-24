@@ -101,13 +101,16 @@ class LLMAnalyzer:
 {position_section}
 
 ## DATOS TÉCNICOS ACTUALES:
+- **Precio Actual**: ${latest.get('close_price', 'N/A')} | **Volumen**: {latest.get('volume', 'N/A')}
 - **RSI**: {latest.get('rsi', 'N/A')} (Momentum)
 - **MACD**: {latest.get('macd', 'N/A')} / Signal: {latest.get('macd_signal', 'N/A')} 
 - **MACD Histogram**: {latest.get('macd_hist', 'N/A')} (Divergencia)
-- **SMA**: {latest.get('sma', 'N/A')} (Precio actual vs tendencia)
+- **Medias Móviles**: SMA20: {latest.get('sma', 'N/A')} | SMA200: {latest.get('sma200', 'N/A')}
+- **EMAs**: EMA20: {latest.get('ema20', 'N/A')} | EMA200: {latest.get('ema200', 'N/A')}
 - **ADX**: {latest.get('adx', 'N/A')} (Fuerza de tendencia)
+- **ATR14**: {latest.get('atr14', 'N/A')} (Volatilidad/Riesgo)
+- **OBV**: {latest.get('obv', 'N/A')} (Volumen acumulado)
 - **Bollinger Bands**: Upper: {latest.get('bb_u', 'N/A')} | Middle: {latest.get('bb_m', 'N/A')} | Lower: {latest.get('bb_l', 'N/A')}
-- **Precio Actual**: ${latest.get('close_price', 'N/A')}
 
 ## CONTEXTO HISTÓRICO (30h):
 - RSI Range: {summary_30.get('rsi_min', 'N/A')}-{summary_30.get('rsi_max', 'N/A')} (Promedio: {summary_30.get('rsi_mean', 'N/A')})
@@ -129,11 +132,12 @@ Eres un trader profesional experimentado con 10+ años en mercados cripto. {'Tu 
 
 **ANALIZA:**
 1. **Momentum**: ¿El RSI sugiere sobreventa (<30) o sobrecompra (>70)? ¿Hay divergencias?
-2. **Tendencia**: ¿El MACD está cruzando? ¿El ADX muestra fuerza trending (>25)?
-3. **Precio vs Media**: ¿Estamos cerca del SMA? ¿Rompiendo resistencia/soporte?
-4. **Volatilidad**: ¿Las Bollinger Bands se están expandiendo/contrayendo?
-5. **Contexto**: ¿Los eventos históricos apoyan la decisión?
-{'6. **Gestión de Posición**: ¿La posición actual está en territorio favorable? ¿Necesita ajustes?' if has_position else ''}
+2. **Tendencia**: ¿El MACD está cruzando? ¿El ADX muestra fuerza trending (>25)? ¿EMAs confirman dirección?
+3. **Precio vs Medias**: ¿Precio vs EMA20/200 y SMA20/200? ¿Rompiendo resistencia/soporte clave?
+4. **Volatilidad y Riesgo**: ¿ATR14 sugiere alta/baja volatilidad? ¿BBands expandiendo/contrayendo?
+5. **Volumen**: ¿OBV confirma el movimiento de precio? ¿Volumen actual es significativo?
+6. **Contexto**: ¿Los eventos históricos apoyan la decisión?
+{'7. **Gestión de Posición**: ¿La posición actual está en territorio favorable? ¿Necesita ajustes?' if has_position else ''}
 
 **DECISIÓN REQUERIDA:**
 {'- **ACCIÓN**: HOLD (mantener), CLOSE (cerrar), ADD (añadir), MOVE_SL (mover stop), TAKE_PROFIT (tomar ganancias)' if has_position else '- **ACCIÓN**: LONG, SHORT, o WAIT'}
