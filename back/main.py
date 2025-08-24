@@ -413,7 +413,37 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
         result["errors"] = data["errors"]
         return result
     
-    # Obtener todos los indicadores con manejo de None
+    # Obtener precio actual en tiempo real de Bybit ANTES de procesar indicadores
+    current_price = data.get("close_price", data.get("price", 0))  # Precio por defecto de indicadores
+    if bybit_service:
+        try:
+            # Convertir símbolo para Bybit (BTC/USD -> BTCUSDT)
+            original_symbol = data.get("symbol", "BTC/USD")
+            print(f"[{timestamp}] 🔍 Símbolo original para precio: '{original_symbol}'")
+            if "/" in original_symbol:
+                # Formato BTC/USD -> BTCUSDT
+                symbol_base = original_symbol.replace("/", "")
+                bybit_symbol = symbol_base + "T"
+                print(f"[{timestamp}] 🔄 Convertido para precio de {original_symbol} a {bybit_symbol}")
+            else:
+                # Ya está en formato BTCUSDT, no agregar T adicional si ya termina en T
+                if original_symbol.endswith("T"):
+                    bybit_symbol = original_symbol
+                    print(f"[{timestamp}] ✅ Usando símbolo original para precio (ya termina en T): {bybit_symbol}")
+                else:
+                    bybit_symbol = original_symbol + "T"
+                    print(f"[{timestamp}] 🔄 Agregando T al símbolo para precio: {bybit_symbol}")
+            real_time_price = bybit_service.get_price(bybit_symbol)
+            if real_time_price:
+                current_price = real_time_price
+                print(f"[{timestamp}] 💰 Precio actual en tiempo real obtenido: ${current_price}")
+            else:
+                print(f"[{timestamp}] ⚠️ No se pudo obtener precio en tiempo real, usando precio de indicadores: ${current_price}")
+        except Exception as e:
+            print(f"[{timestamp}] ❌ Error obteniendo precio en tiempo real: {e}")
+            print(f"[{timestamp}] 🔄 Usando precio de indicadores: ${current_price}")
+    
+    # Obtener todos los indicadores con manejo de None y precio actualizado
     indicators = {
         "rsi": data.get("rsi"),
         "macd": data.get("macd"),
@@ -430,12 +460,12 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
         "adx": data.get("adx"),
         "atr14": data.get("atr14"),
         "obv": data.get("obv"),
-        "price": data.get("close_price", data.get("price", 0))
+        "price": current_price  # Usar el precio en tiempo real
     }
     
-    # Agregar timestamp y guardar en BD
+    # Agregar timestamp y guardar en BD con precio actualizado
     data["timestamp"] = timestamp
-    data["close_price"] = indicators["price"]
+    data["close_price"] = current_price  # Guardar el precio en tiempo real en la BD
     
     # Inicialmente la señal es False
     signal_active = False
@@ -526,35 +556,8 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
                     "current_position": current_position
                 }
                 
-                # Obtener precio actual en tiempo real de Bybit
-                current_price = indicators.get("price", 0)  # Precio por defecto de indicadores
-                if bybit_service:
-                    try:
-                        # Convertir símbolo para Bybit (BTC/USD -> BTCUSDT)
-                        original_symbol = data.get("symbol", "BTC/USD")
-                        print(f"[{timestamp}] 🔍 Símbolo original para precio: '{original_symbol}'")
-                        if "/" in original_symbol:
-                            # Formato BTC/USD -> BTCUSDT
-                            symbol_base = original_symbol.replace("/", "")
-                            bybit_symbol = symbol_base + "T"
-                            print(f"[{timestamp}] 🔄 Convertido para precio de {original_symbol} a {bybit_symbol}")
-                        else:
-                            # Ya está en formato BTCUSDT, no agregar T adicional si ya termina en T
-                            if original_symbol.endswith("T"):
-                                bybit_symbol = original_symbol
-                                print(f"[{timestamp}] ✅ Usando símbolo original para precio (ya termina en T): {bybit_symbol}")
-                            else:
-                                bybit_symbol = original_symbol + "T"
-                                print(f"[{timestamp}] 🔄 Agregando T al símbolo para precio: {bybit_symbol}")
-                        real_time_price = bybit_service.get_price(bybit_symbol)
-                        if real_time_price:
-                            current_price = real_time_price
-                            print(f"[{timestamp}] 💰 Precio actual en tiempo real: ${current_price}")
-                        else:
-                            print(f"[{timestamp}] ⚠️ No se pudo obtener precio en tiempo real, usando precio de indicadores: ${current_price}")
-                    except Exception as e:
-                        print(f"[{timestamp}] ❌ Error obteniendo precio en tiempo real: {e}")
-                        print(f"[{timestamp}] 🔄 Usando precio de indicadores: ${current_price}")
+                # El precio actual ya se obtuvo al principio del proceso
+                current_price = indicators.get("price", 0)  # Ya contiene el precio en tiempo real
                 
                 strategy_id = save_llm_strategy(
                     strategy_service=strategy_service,
