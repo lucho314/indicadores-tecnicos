@@ -111,13 +111,13 @@ class BybitService:
 
     def get_available_balance(self):
         """
-        Obtiene el balance disponible para invertir
+        Obtiene el balance disponible para trading de futuros
         
         Returns:
             Diccionario con información del balance disponible
         """
         try:
-            print("💰 Consultando balance de la cuenta...")
+            print("💰 Consultando balance de la cuenta UNIFIED para futuros...")
             
             response = self.client.get_wallet_balance(
                 accountType="UNIFIED",
@@ -144,6 +144,9 @@ class BybitService:
                     coins = account_info.get('coin', [])
                     print(f"🪙 Monedas en cuenta: {len(coins)}")
                     
+                    # Para futuros, usar totalAvailableBalance del account_info principal
+                    total_available = account_info.get('totalAvailableBalance', '0')
+                    
                     for coin in coins:
                         if coin.get('coin') == 'USDT':
                             # Función helper para convertir strings vacíos a 0
@@ -157,12 +160,13 @@ class BybitService:
                                 'coin': coin.get('coin'),
                                 'walletBalance': safe_float(coin.get('walletBalance', 0)),
                                 'availableToWithdraw': safe_float(coin.get('availableToWithdraw', 0)),
-                                'transferBalance': safe_float(coin.get('totalAvailableBalance', 0)),  # Usar totalAvailableBalance
+                                'transferBalance': safe_float(total_available, 0),  # Balance disponible para futuros
                                 'bonus': safe_float(coin.get('bonus', 0)),
                                 'equity': safe_float(coin.get('equity', 0)),
                                 'usdValue': safe_float(coin.get('usdValue', 0))
                             }
-                            print(f"✅ Balance USDT encontrado: {balance_info}")
+                            print(f"✅ Balance USDT encontrado para futuros: {balance_info}")
+                            print(f"💵 Balance disponible para trading: ${balance_info['transferBalance']}")
                             return balance_info
             
             print("⚠️ No se encontró balance USDT, devolviendo balance vacío")
@@ -220,4 +224,214 @@ class BybitService:
         except Exception as e:
             print(f"💥 Error consultando precio para {symbol}: {str(e)}")
             raise Exception(f"Error consultando precio: {str(e)}")
+    
+    def execute_strategy(self, symbol: str, side: str, entry_price: float, take_profit: float, 
+                        stop_loss: float, average_price: float, ticket: str, usdt_amount: float):
+        """
+        Ejecuta una estrategia de trading en Bybit con parámetros específicos.
+        
+        Args:
+            symbol: Símbolo del par (ej: 'BTCUSDT')
+            side: Dirección de la operación ('Buy' o 'Sell')
+            entry_price: Precio de entrada
+            take_profit: Precio de take profit
+            stop_loss: Precio de stop loss
+            average_price: Precio promedio
+            ticket: Identificador del ticket/estrategia
+            usdt_amount: Cantidad en USDT a invertir
+            
+        Returns:
+            Diccionario con el resultado de la ejecución
+        """
+        try:
+            print(f"🚀 Ejecutando estrategia {ticket} para {symbol}...")
+            print(f"📊 Parámetros: Side={side}, Entry=${entry_price}, TP=${take_profit}, SL=${stop_loss}")
+            print(f"💰 Cantidad: ${usdt_amount} USDT, Average=${average_price}")
+            
+            # Calcular la cantidad en base al precio de entrada y cantidad en USDT
+            quantity = round(usdt_amount / entry_price, 6)
+            print(f"📏 Cantidad calculada inicial: {quantity} {symbol.replace('USDT', '')}")
+            
+            # Para futuros de BTCUSDT, la cantidad mínima es 0.001 BTC
+            min_quantity = 0.001
+            if quantity < min_quantity:
+                quantity = min_quantity
+                actual_usdt = quantity * entry_price
+                print(f"⚠️ Cantidad ajustada al mínimo: {quantity} BTC (${actual_usdt:.2f} USDT)")
+            
+            print(f"📏 Cantidad final: {quantity} {symbol.replace('USDT', '')}")
+            
+            # Validar parámetros
+            if side not in ['Buy', 'Sell']:
+                raise ValueError(f"Side debe ser 'Buy' o 'Sell', recibido: {side}")
+            
+            if usdt_amount <= 0:
+                raise ValueError(f"La cantidad en USDT debe ser mayor a 0, recibido: {usdt_amount}")
+            
+            if entry_price <= 0:
+                raise ValueError(f"El precio de entrada debe ser mayor a 0, recibido: {entry_price}")
+            
+            # Verificar balance disponible
+            balance_info = self.get_available_balance()
+            available_balance = balance_info.get('transferBalance', 0)
+            
+            if available_balance < usdt_amount:
+                raise ValueError(f"Balance insuficiente. Disponible: ${available_balance}, Requerido: ${usdt_amount}")
+            
+            # Crear orden principal
+            print(f"📝 Creando orden {side} para {symbol}...")
+            
+            order_response = self.client.place_order(
+                category="linear",
+                symbol=symbol,
+                side=side,
+                orderType="Limit",  # Orden límite para precio específico
+                qty=str(quantity),
+                price=str(entry_price),
+                timeInForce="GTC",  # Good Till Cancelled
+                orderLinkId=f"{ticket}_{symbol}_{side}",  # ID único para la orden
+                reduceOnly=False
+            )
+            
+            print(f"📋 Respuesta orden principal: {order_response}")
+            
+            # Extraer información de la orden
+            if isinstance(order_response, dict) and order_response.get('retCode') == 0:
+                result = order_response.get('result', {})
+                order_id = result.get('orderId')
+                
+                if order_id:
+                    print(f"✅ Orden principal creada: {order_id}")
+                    
+                    # Crear órdenes de Take Profit y Stop Loss
+                    tp_sl_result = self._create_tp_sl_orders(
+                        symbol=symbol,
+                        side=side,
+                        quantity=quantity,
+                        take_profit=take_profit,
+                        stop_loss=stop_loss,
+                        ticket=ticket
+                    )
+                    
+                    return {
+                        'success': True,
+                        'ticket': ticket,
+                        'symbol': symbol,
+                        'side': side,
+                        'entry_price': entry_price,
+                        'quantity': quantity,
+                        'usdt_amount': usdt_amount,
+                        'order_id': order_id,
+                        'take_profit': take_profit,
+                        'stop_loss': stop_loss,
+                        'average_price': average_price,
+                        'tp_sl_orders': tp_sl_result,
+                        'message': f"Estrategia {ticket} ejecutada exitosamente"
+                    }
+                else:
+                    raise Exception(f"No se pudo obtener el ID de la orden: {order_response}")
+            else:
+                error_msg = order_response.get('retMsg', 'Error desconocido')
+                raise Exception(f"Error creando orden: {error_msg}")
+                
+        except Exception as e:
+            print(f"💥 Error ejecutando estrategia {ticket}: {str(e)}")
+            return {
+                'success': False,
+                'ticket': ticket,
+                'symbol': symbol,
+                'error': str(e),
+                'message': f"Error ejecutando estrategia {ticket}: {str(e)}"
+            }
+    
+    def _create_tp_sl_orders(self, symbol: str, side: str, quantity: float, 
+                           take_profit: float, stop_loss: float, ticket: str):
+        """
+        Crea órdenes de Take Profit y Stop Loss para una posición.
+        
+        Args:
+            symbol: Símbolo del par
+            side: Dirección de la orden original
+            quantity: Cantidad de la posición
+            take_profit: Precio de take profit
+            stop_loss: Precio de stop loss
+            ticket: Identificador del ticket
+            
+        Returns:
+            Diccionario con el resultado de las órdenes TP/SL
+        """
+        try:
+            print(f"🎯 Creando órdenes TP/SL para {symbol}...")
+            
+            # Determinar el lado opuesto para cerrar la posición
+            close_side = "Sell" if side == "Buy" else "Buy"
+            
+            tp_sl_results = {}
+            
+            # Crear orden de Take Profit
+            if take_profit > 0:
+                print(f"🎯 Creando Take Profit a ${take_profit}...")
+                tp_response = self.client.place_order(
+                    category="linear",
+                    symbol=symbol,
+                    side=close_side,
+                    orderType="Limit",
+                    qty=str(quantity),
+                    price=str(take_profit),
+                    timeInForce="GTC",
+                    orderLinkId=f"{ticket}_{symbol}_TP",
+                    reduceOnly=True  # Solo para cerrar posición
+                )
+                
+                if isinstance(tp_response, dict) and tp_response.get('retCode') == 0:
+                    tp_order_id = tp_response.get('result', {}).get('orderId')
+                    tp_sl_results['take_profit'] = {
+                        'success': True,
+                        'order_id': tp_order_id,
+                        'price': take_profit
+                    }
+                    print(f"✅ Take Profit creado: {tp_order_id}")
+                else:
+                    tp_sl_results['take_profit'] = {
+                        'success': False,
+                        'error': tp_response.get('retMsg', 'Error desconocido')
+                    }
+            
+            # Crear orden de Stop Loss
+            if stop_loss > 0:
+                print(f"🛑 Creando Stop Loss a ${stop_loss}...")
+                sl_response = self.client.place_order(
+                    category="linear",
+                    symbol=symbol,
+                    side=close_side,
+                    orderType="Market",  # Stop Loss como orden de mercado
+                    qty=str(quantity),
+                    stopLoss=str(stop_loss),
+                    timeInForce="GTC",
+                    orderLinkId=f"{ticket}_{symbol}_SL",
+                    reduceOnly=True
+                )
+                
+                if isinstance(sl_response, dict) and sl_response.get('retCode') == 0:
+                    sl_order_id = sl_response.get('result', {}).get('orderId')
+                    tp_sl_results['stop_loss'] = {
+                        'success': True,
+                        'order_id': sl_order_id,
+                        'price': stop_loss
+                    }
+                    print(f"✅ Stop Loss creado: {sl_order_id}")
+                else:
+                    tp_sl_results['stop_loss'] = {
+                        'success': False,
+                        'error': sl_response.get('retMsg', 'Error desconocido')
+                    }
+            
+            return tp_sl_results
+            
+        except Exception as e:
+            print(f"💥 Error creando órdenes TP/SL: {str(e)}")
+            return {
+                'take_profit': {'success': False, 'error': str(e)},
+                'stop_loss': {'success': False, 'error': str(e)}
+            }
 

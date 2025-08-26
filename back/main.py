@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from typing import Dict, Any, Optional
 from service.indicadores_tecnicos import obtener_indicadores
+from service.klines_service import KlinesService
+from service.technical_indicators import TechnicalIndicatorsCalculator
 from service.llm_analyzer import llamar_llm
 from service.whatsapp_notifier import send_whatsapp_alert
 from service.bybit_service import BybitService
@@ -363,9 +365,74 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
     if symbol:
         print(f"[{timestamp}] Símbolo recibido por parámetro: {symbol}")
     
-    # Obtener indicadores
-    print(f"[{timestamp}] Obteniendo indicadores...")
-    data = obtener_indicadores(symbol) if symbol else obtener_indicadores()
+    # Obtener indicadores directamente de Bybit (datos frescos)
+    print(f"[{timestamp}] Obteniendo indicadores con datos frescos de Bybit...")
+    
+    # Usar símbolo por defecto si no se proporciona
+    target_symbol = symbol if symbol else "BTCUSDT"
+    target_interval = "240"  # 4 horas por defecto
+    
+    try:
+        # Inicializar servicios para obtener datos frescos
+        klines_service = KlinesService(db)
+        calculator = TechnicalIndicatorsCalculator()
+        
+        # Obtener las últimas 250 velas directamente de Bybit
+        print(f"[{timestamp}] 📥 Obteniendo datos frescos de Bybit para {target_symbol}...")
+        fresh_klines = klines_service.fetch_klines_from_api(
+            symbol=target_symbol,
+            interval=target_interval,
+            limit=250
+        )
+        
+        if not fresh_klines or len(fresh_klines) < 20:
+            print(f"[{timestamp}] ❌ Insuficientes datos de Bybit: {len(fresh_klines) if fresh_klines else 0}")
+            # Fallback al método anterior
+            data = obtener_indicadores(target_symbol)
+        else:
+            print(f"[{timestamp}] ✅ Obtenidas {len(fresh_klines)} velas frescas de Bybit")
+            
+            # Calcular indicadores con datos frescos
+            indicators = calculator.calculate_all_indicators(fresh_klines)
+            
+            if indicators:
+                # Adaptar formato para compatibilidad
+                data = {
+                    "symbol": target_symbol,
+                    "interval": target_interval,
+                    "timestamp": indicators.get("timestamp", timestamp),
+                    "price": indicators.get("close_price", 0),
+                    "close_price": indicators.get("close_price", 0),
+                    "rsi": indicators.get("rsi14", 0),
+                    "rsi14": indicators.get("rsi14", 0),
+                    "ema20": indicators.get("ema20", 0),
+                    "ema200": indicators.get("ema200", 0),
+                    "sma": indicators.get("sma20", 0),
+                    "sma20": indicators.get("sma20", 0),
+                    "sma50": indicators.get("sma50", 0),
+                    "sma200": indicators.get("sma200", 0),
+                    "macd": indicators.get("macd", 0),
+                    "macd_signal": indicators.get("macd_signal", 0),
+                    "macd_hist": indicators.get("macd_hist", 0),
+                    "bb_upper": indicators.get("bb_upper", 0),
+                    "bb_middle": indicators.get("bb_middle", 0),
+                    "bb_lower": indicators.get("bb_lower", 0),
+                    "adx": indicators.get("adx14", 0),
+                    "atr14": indicators.get("atr14", 0),
+                    "obv": indicators.get("obv", 0),
+                    "source": "bybit_fresh_data",
+                    "errors": {}
+                }
+                print(f"[{timestamp}] ✅ Indicadores calculados con datos frescos - Precio: ${data['close_price']:.2f}")
+            else:
+                print(f"[{timestamp}] ❌ Error calculando indicadores con datos frescos")
+                # Fallback al método anterior
+                data = obtener_indicadores(target_symbol)
+                
+    except Exception as e:
+        print(f"[{timestamp}] ❌ Error obteniendo datos frescos: {e}")
+        # Fallback al método anterior
+        data = obtener_indicadores(target_symbol)
     
     # Inicializar servicio de Bybit para consultar posiciones
     bybit_service = None

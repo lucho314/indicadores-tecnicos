@@ -11,6 +11,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from database.postgres_db_manager import PostgresIndicadorDB
 from service.trading_strategy_service import TradingStrategyService
+from service.bybit_service import BybitService
+
+# Importar funciones de autenticación desde auth.py
+from .auth import get_current_user, User
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +59,14 @@ class HealthCheck(BaseModel):
     database_connected: bool
     service_version: str
 
+class ExecuteStrategyRequest(BaseModel):
+    strategy_id: int
+    usdt_amount: float
+
 # Variables globales para servicios
 _db = None
 _strategy_service = None
+_bybit_service = None
 
 def get_strategy_service():
     """Dependency para obtener el servicio de estrategias"""
@@ -78,6 +87,20 @@ def get_strategy_service():
             raise HTTPException(status_code=500, detail="Servicio de estrategias no disponible")
     
     return _strategy_service
+
+def get_bybit_service():
+    """Dependency para obtener el servicio de Bybit"""
+    global _bybit_service
+    
+    if _bybit_service is None:
+        try:
+            _bybit_service = BybitService()
+            logger.info("✅ Servicio de Bybit inicializado")
+        except Exception as e:
+            logger.error(f"❌ Error inicializando servicio de Bybit: {e}")
+            raise HTTPException(status_code=500, detail="Servicio de Bybit no disponible")
+    
+    return _bybit_service
 
 @router.post("/", response_model=Dict[str, Any])
 async def create_strategy(
@@ -247,3 +270,71 @@ async def expire_old_strategies(
     except Exception as e:
         logger.error(f"Error expirando estrategias: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/execute")
+async def execute_strategy(
+    request: ExecuteStrategyRequest,
+    current_user: User = Depends(get_current_user),
+    strategy_service: TradingStrategyService = Depends(get_strategy_service),
+    bybit_service: BybitService = Depends(get_bybit_service)
+):
+    """
+    Ejecuta una estrategia específica con la cantidad de USDT especificada
+    
+    - **strategy_id**: ID de la estrategia a ejecutar
+    - **usdt_amount**: Cantidad de USDT a invertir
+    
+    Requiere autenticación de usuario.
+    """
+    try:
+        # Obtener la estrategia de la base de datos
+        strategy = strategy_service.get_strategy_by_id(request.strategy_id)
+        if not strategy:
+            raise HTTPException(status_code=404, detail="Estrategia no encontrada")
+        
+        # Verificar que la estrategia esté activa
+        if strategy.get('status') != 'PENDING':
+            raise HTTPException(
+                status_code=400, 
+                detail=f"La estrategia no está en estado PENDING. Estado actual: {strategy.get('status')}"
+            )
+        
+        # Verificar que la estrategia no haya expirado
+        expires_at = strategy.get('expires_at')
+        if expires_at and datetime.now() > expires_at:
+            raise HTTPException(status_code=400, detail="La estrategia ha expirado")
+        
+        # Ejecutar la estrategia usando el servicio de Bybit
+        result = bybit_service.execute_strategy(
+            strategy_id=f"STRATEGY_{request.strategy_id}",
+            symbol=strategy.get('symbol', 'BTCUSDT'),
+            action=strategy.get('action'),
+            usdt_amount=request.usdt_amount,
+            entry_price=strategy.get('entry_price'),
+            stop_loss=strategy.get('stop_loss'),
+            take_profit=strategy.get('take_profit')
+        )
+        
+        # Actualizar el estado de la estrategia en la base de datos
+        strategy_service.update_strategy_status(
+            request.strategy_id, 
+            'OPEN', 
+            result.get('transaction_id')
+        )
+        
+        logger.info(f"✅ Estrategia {request.strategy_id} ejecutada exitosamente por usuario {current_user.username}")
+        
+        return {
+            "message": "Estrategia ejecutada exitosamente",
+            "strategy_id": request.strategy_id,
+            "usdt_amount": request.usdt_amount,
+            "execution_result": result,
+            "executed_by": current_user.username,
+            "executed_at": datetime.now()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error ejecutando estrategia {request.strategy_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error ejecutando estrategia: {str(e)}")

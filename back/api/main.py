@@ -37,6 +37,9 @@ except ImportError as e:
     logger.warning(f"❌ BybitService no disponible: {e}")
     BYBIT_AVAILABLE = False
 
+# Importar funciones de autenticación
+from .auth import get_current_user, User, verify_token, get_db_connection, security
+
 # Importar rutas de trading strategies
 try:
     from .trading_strategies_api import router as trading_strategies_router
@@ -65,8 +68,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security
-security = HTTPBearer()
+# security se importa desde auth.py
 
 # Models
 class LoginRequest(BaseModel):
@@ -77,12 +79,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class User(BaseModel):
-    id: int
-    username: str
-    email: str
-    is_active: bool
-    is_admin: bool
+# User se importa desde auth.py
 
 class SeedRequest(BaseModel):
     password: str
@@ -114,20 +111,7 @@ class IndicadoresResponse(BaseModel):
     per_page: int
     total_pages: int
 
-# Database connection
-def get_db_connection():
-    try:
-        connection = psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
-            database=os.getenv("DB_NAME", "indicadores_db"),
-            user=os.getenv("DB_USER", "indicadores_user"),
-            password=os.getenv("DB_PASSWORD", "indicadores_pass123")
-        )
-        return connection
-    except Exception as e:
-        logger.error(f"Error conectando a la DB: {e}")
-        raise HTTPException(status_code=500, detail="Error de conexión a la base de datos")
+# get_db_connection se importa desde auth.py
 
 # JWT functions
 def create_access_token(data: dict):
@@ -137,46 +121,7 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token inválido",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return username
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-def get_current_user(username: str = Depends(verify_token)):
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, username, email, is_active, is_admin FROM users WHERE username = %s",
-            (username,)
-        )
-        user_data = cursor.fetchone()
-        if not user_data:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        
-        return User(
-            id=user_data[0],
-            username=user_data[1],
-            email=user_data[2],
-            is_active=user_data[3],
-            is_admin=user_data[4]
-        )
-    finally:
-        conn.close()
+# verify_token y get_current_user se importan desde auth.py
 
 # Routes
 @app.get("/")
@@ -904,6 +849,73 @@ async def websocket_positions(websocket: WebSocket, symbol: str):
     except Exception as e:
         logger.error(f"❌ Error en WebSocket: {e}")
         manager.disconnect(websocket)
+
+
+@app.get("/indicators/{symbol}")
+async def get_technical_indicators(symbol: str, interval: str = "240"):
+    """
+    Obtiene los indicadores técnicos para un símbolo específico directamente desde Bybit.
+    
+    Args:
+        symbol: El símbolo del par (ej: 'BTCUSDT')
+        interval: Intervalo en minutos (240=4h, 60=1h, por defecto 240)
+    
+    Returns:
+        Un diccionario con todos los indicadores técnicos calculados.
+    """
+    try:
+        logger.info(f"🔍 Endpoint /indicators/{symbol} llamado con intervalo: {interval}")
+        
+        # Importar servicios necesarios
+        from service.klines_service import KlinesService
+        from service.technical_indicators import TechnicalIndicatorsCalculator
+        
+        # Obtener datos frescos directamente de Bybit
+        klines_service = KlinesService()
+        indicators_calculator = TechnicalIndicatorsCalculator()
+        
+        # Obtener las últimas 250 velas directamente de la API (suficiente para EMA200)
+        klines = klines_service.fetch_klines_from_api(symbol=symbol, interval=interval, limit=250)
+        
+        if len(klines) < 20:
+            logger.error(f"❌ Insuficientes velas para cálculo: {len(klines)} (mínimo 20)")
+            return {
+                "success": False,
+                "symbol": symbol,
+                "interval": interval,
+                "error": f"Insuficientes datos: {len(klines)} velas (mínimo 20)",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        logger.info(f"📊 Calculando indicadores con {len(klines)} velas frescas de Bybit")
+        
+        # Calcular indicadores con datos frescos
+        indicators = indicators_calculator.calculate_all_indicators(klines)
+        
+        if indicators and indicators_calculator.validate_indicators(indicators):
+            logger.info(f"✅ Indicadores calculados para {symbol} - Precio: ${indicators.get('close_price', 0):.2f}")
+            return {
+                "success": True,
+                "symbol": symbol,
+                "interval": interval,
+                "data": indicators,
+                "timestamp": datetime.now().isoformat(),
+                "data_source": "bybit_live_api",
+                "klines_count": len(klines)
+            }
+        else:
+            logger.warning(f"⚠️ Error calculando indicadores para {symbol}")
+            return {
+                "success": False,
+                "symbol": symbol,
+                "interval": interval,
+                "error": "Error en cálculo de indicadores",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"💥 Error obteniendo indicadores para {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo indicadores para {symbol}: {str(e)}")
 
 
 if __name__ == "__main__":
