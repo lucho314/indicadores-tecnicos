@@ -874,8 +874,8 @@ async def get_technical_indicators(symbol: str, interval: str = "240"):
         klines_service = KlinesService()
         indicators_calculator = TechnicalIndicatorsCalculator()
         
-        # Obtener las últimas 250 velas directamente de la API (suficiente para EMA200)
-        klines = klines_service.fetch_klines_from_api(symbol=symbol, interval=interval, limit=250)
+        # Obtener las últimas 1000 velas directamente de la API para análisis más preciso
+        klines = klines_service.fetch_klines_from_api(symbol=symbol, interval=interval, limit=1000)
         
         if len(klines) < 20:
             logger.error(f"❌ Insuficientes velas para cálculo: {len(klines)} (mínimo 20)")

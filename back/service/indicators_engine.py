@@ -138,7 +138,7 @@ class IndicatorsEngine:
             klines = self.klines_service.get_klines_for_calculation(
                 symbol=symbol, 
                 interval=interval, 
-                limit=250,  # Suficiente para EMA200
+                limit=1000,  # Análisis más preciso con más datos históricos
                 exclude_current=True
             )
             

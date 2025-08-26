@@ -211,11 +211,20 @@ class BybitService:
                 # Validar que la lista de tickers no esté vacía
                 if ticker_list and isinstance(ticker_list, list):
                     ticker = ticker_list[0]  # Tomar el primer resultado
+                    
+                    # En testnet, usar indexPrice (precio real del mercado)
+                    # En lugar de lastPrice (precio artificial del testnet)
+                    index_price = ticker.get('indexPrice')
                     last_price = ticker.get('lastPrice')
                     
-                    if last_price:
+                    # Preferir indexPrice si está disponible (más preciso)
+                    if index_price:
+                        price = float(index_price)
+                        print(f"✅ Precio índice para {symbol}: {price} (indexPrice)")
+                        return price
+                    elif last_price:
                         price = float(last_price)
-                        print(f"✅ Precio actual para {symbol}: {price}")
+                        print(f"✅ Precio último para {symbol}: {price} (lastPrice)")
                         return price
             
             print(f"⚠️ No se pudo obtener el precio para {symbol}")

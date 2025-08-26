@@ -377,20 +377,20 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
         klines_service = KlinesService(db)
         calculator = TechnicalIndicatorsCalculator()
         
-        # Obtener las últimas 250 velas directamente de Bybit
+        # Obtener las últimas 1000 velas directamente de Bybit para análisis más preciso
         print(f"[{timestamp}] 📥 Obteniendo datos frescos de Bybit para {target_symbol}...")
         fresh_klines = klines_service.fetch_klines_from_api(
             symbol=target_symbol,
             interval=target_interval,
-            limit=250
+            limit=1000
         )
         
-        if not fresh_klines or len(fresh_klines) < 20:
+        if not fresh_klines or len(fresh_klines) < 50:
             print(f"[{timestamp}] ❌ Insuficientes datos de Bybit: {len(fresh_klines) if fresh_klines else 0}")
             # Fallback al método anterior
             data = obtener_indicadores(target_symbol)
         else:
-            print(f"[{timestamp}] ✅ Obtenidas {len(fresh_klines)} velas frescas de Bybit")
+            print(f"[{timestamp}] ✅ Obtenidas {len(fresh_klines)} velas frescas de Bybit para análisis completo")
             
             # Calcular indicadores con datos frescos
             indicators = calculator.calculate_all_indicators(fresh_klines)
