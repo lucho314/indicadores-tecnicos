@@ -36,3 +36,51 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+@layer utilities {
+  .text-profit {
+    @apply text-green-400;
+  }
+  .text-loss {
+    @apply text-red-400;
+  }
+  .bg-profit {
+    @apply bg-green-600;
+  }
+  .bg-profit\/90 {
+    @apply bg-green-600/90;
+  }
+}
+
+@layer components {
+  /* Custom slider thumb styles */
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 10;
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 10;
+  }
+  
+  input[type="range"]::-moz-range-track {
+    background: transparent;
+    border: none;
+  }
+}

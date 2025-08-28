@@ -304,25 +304,33 @@ async def execute_strategy(
         if expires_at and datetime.now() > expires_at:
             raise HTTPException(status_code=400, detail="La estrategia ha expirado")
         
+        # Mapear la acción de la estrategia al formato de Bybit
+        side = "Buy" if strategy.get('action') == 'LONG' else "Sell"
+        
         # Ejecutar la estrategia usando el servicio de Bybit
         result = bybit_service.execute_strategy(
-            strategy_id=f"STRATEGY_{request.strategy_id}",
             symbol=strategy.get('symbol', 'BTCUSDT'),
-            action=strategy.get('action'),
-            usdt_amount=request.usdt_amount,
+            side=side,
             entry_price=strategy.get('entry_price'),
+            take_profit=strategy.get('take_profit'),
             stop_loss=strategy.get('stop_loss'),
-            take_profit=strategy.get('take_profit')
+            average_price=strategy.get('entry_price'),  # Usar entry_price como average_price
+            ticket=f"STRATEGY_{request.strategy_id}",
+            usdt_amount=request.usdt_amount
         )
         
-        # Actualizar el estado de la estrategia en la base de datos
-        strategy_service.update_strategy_status(
-            request.strategy_id, 
-            'OPEN', 
-            result.get('transaction_id')
-        )
-        
-        logger.info(f"✅ Estrategia {request.strategy_id} ejecutada exitosamente por usuario {current_user.username}")
+        # Solo actualizar el estado si la ejecución fue exitosa
+        if result.get('success', False):
+            # Marcar como OPEN con executed=true cuando se coloca exitosamente
+            strategy_service.update_strategy_status(
+                request.strategy_id, 
+                'OPEN', 
+                result.get('transaction_id'),
+                executed_at=datetime.now()
+            )
+            logger.info(f"✅ Estrategia {request.strategy_id} ejecutada exitosamente por usuario {current_user.username}")
+        else:
+            logger.warning(f"⚠️ Estrategia {request.strategy_id} falló en ejecución: {result.get('error', 'Error desconocido')}")
         
         return {
             "message": "Estrategia ejecutada exitosamente",

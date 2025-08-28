@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { BarChart3, Settings, TrendingUp, Database, Menu, X } from "lucide-react"
+import { BarChart3, Settings, TrendingUp, Database, Menu, X, Target } from "lucide-react"
 import { Button } from "./ui/Button"
 import { cn } from "../lib/utils"
 
@@ -13,6 +13,7 @@ interface SidebarProps {
 const navigation = [
   { id: "overview", name: "Resumen", icon: BarChart3 },
   { id: "indicators", name: "Gráficos", icon: TrendingUp },
+  { id: "strategies", name: "Estrategias", icon: Target },
   { id: "data", name: "Datos", icon: Database },
   { id: "settings", name: "Configuración", icon: Settings },
 ]

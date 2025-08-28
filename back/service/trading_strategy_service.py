@@ -173,11 +173,11 @@ class TradingStrategyService:
             
             with self.db.get_connection() as conn:
                 with conn.cursor() as cur:
-                    query = "SELECT * FROM active_trading_strategies"
+                    query = "SELECT * FROM active_trading_strategies where status = 'PENDING'"
                     params = None
                     
                     if symbol:
-                        query += " WHERE symbol = %s"
+                        query += " and symbol = %s"
                         params = (symbol,)
                     
                     cur.execute(query, params)

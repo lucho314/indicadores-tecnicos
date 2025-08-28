@@ -1,6 +1,6 @@
-import axios from "axios"
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,32 +8,32 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-})
+});
 
 // Request interceptor for auth
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("CZECAC")
+    const token = localStorage.getItem("trading-app-token");
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return config
+    return config;
   },
-  (error) => Promise.reject(error),
-)
+  (error) => Promise.reject(error)
+);
 
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("trading-app-user")
-      window.location.href = "/login"
+      localStorage.removeItem("trading-app-user");
+      localStorage.removeItem("trading-app-token");
+      window.location.href = "/login";
     }
-    return Promise.reject(error)
-  },
-)
-
+    return Promise.reject(error);
+  }
+);
 
 const mockBybitData: BybitPositionsResponse = {
   success: true,
@@ -63,103 +63,154 @@ const mockBybitData: BybitPositionsResponse = {
     BNBUSDT: null,
   },
   timestamp: new Date().toISOString(),
-}
+};
 
 export interface IndicatorData {
-  id: number
-  timestamp: string
-  symbol: string
-  interval_tf: string
-  price: number
-  rsi: number
-  sma: number
-  adx: number
-  macd: number
-  macd_signal: number
-  macd_hist: number
-  bb_upper: number
-  bb_middle: number
-  bb_lower: number
-  signal?: boolean
-  raw_data?: string
-  created_at: string
+  id: number;
+  timestamp: string;
+  symbol: string;
+  interval_tf: string;
+  price: number;
+  rsi: number;
+  sma: number;
+  adx: number;
+  macd: number;
+  macd_signal: number;
+  macd_hist: number;
+  bb_upper: number;
+  bb_middle: number;
+  bb_lower: number;
+  signal?: boolean;
+  raw_data?: string;
+  created_at: string;
 }
 
 export interface ApiResponse<T> {
-  data: T[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface IndicatorsFilters {
-  symbol?: string
-  interval?: string
-  search?: string
-  page?: number
-  limit?: number
-  startDate?: string
-  endDate?: string
+  symbol?: string;
+  interval?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface Position {
-  symbol: string
-  side: string
-  size: number
-  avgPrice: number
-  markPrice: number
-  unrealisedPnl: number
-  leverage: string
-  positionStatus: string
-  createdTime: string
-  updatedTime: string
+  symbol: string;
+  side: string;
+  size: number;
+  avgPrice: number;
+  markPrice: number;
+  unrealisedPnl: number;
+  leverage: string;
+  positionStatus: string;
+  createdTime: string;
+  updatedTime: string;
 }
 
 export interface PositionsResponse {
-  success: boolean
-  totalOpenPositions: number
+  success: boolean;
+  totalOpenPositions: number;
   positions: {
-    BTCUSDT: Position | null
-    ETHUSDT: Position | null
-    BNBUSDT: Position | null
-  }
-  timestamp: string
-  error?: string
+    BTCUSDT: Position | null;
+    ETHUSDT: Position | null;
+    BNBUSDT: Position | null;
+  };
+  timestamp: string;
+  error?: string;
 }
 
 export interface BybitPosition {
-  symbol: string
-  side: "Buy" | "Sell"
-  size: number
-  avgPrice: number
-  markPrice: number
-  unrealisedPnl: number
-  leverage: string
-  positionValue: number
+  symbol: string;
+  side: "Buy" | "Sell";
+  size: number;
+  avgPrice: number;
+  markPrice: number;
+  unrealisedPnl: number;
+  leverage: string;
+  positionValue: number;
 }
 
 export interface BybitBalanceInfo {
-  coin: string
-  walletBalance: number
-  availableToWithdraw: number
-  transferBalance: number
-  bonus: number
-  equity: number
-  usdValue: number
+  coin: string;
+  walletBalance: number;
+  availableToWithdraw: number;
+  transferBalance: number;
+  bonus: number;
+  equity: number;
+  usdValue: number;
 }
 
 export interface BybitPositionsResponse {
-  success: boolean
-  totalOpenPositions: number
-  availableBalance: number
-  balanceInfo: BybitBalanceInfo
+  success: boolean;
+  totalOpenPositions: number;
+  availableBalance: number;
+  balanceInfo: BybitBalanceInfo;
   positions: {
-    BTCUSDT: BybitPosition | null
-    ETHUSDT: BybitPosition | null
-    BNBUSDT: BybitPosition | null
-  }
-  timestamp: string
+    BTCUSDT: BybitPosition | null;
+    ETHUSDT: BybitPosition | null;
+    BNBUSDT: BybitPosition | null;
+  };
+  timestamp: string;
+}
+
+// Trading Strategies Interfaces
+export interface TradingStrategy {
+  id: number;
+  symbol: string;
+  action: "LONG" | "SHORT";
+  confidence: number;
+  entry_price: number;
+  stop_loss?: number;
+  take_profit?: number;
+  risk_reward_ratio: number;
+  justification: string;
+  key_factors: string;
+  risk_level: "LOW" | "MEDIUM" | "HIGH";
+  executed: boolean;
+  status: "PENDING" | "EXECUTED" | "EXPIRED" | "DECLINED";
+  transaction_id?: string | null;
+  created_at: string;
+  expires_at: string;
+  executed_at?: string | null;
+  closed_at?: string | null;
+  llm_response?: string | null;
+  market_conditions?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ActiveStrategiesResponse {
+  success: boolean;
+  strategies: TradingStrategy[];
+  total: number;
+  timestamp: string;
+}
+
+export interface ExecuteStrategyRequest {
+  strategy_id: string;
+  usdt_amount: number;
+  token: string;
+}
+
+export interface ExecuteStrategyResponse {
+  success: boolean;
+  message: string;
+  execution_id?: string;
+  timestamp: string;
+}
+
+export interface ExpireStrategyResponse {
+  success: boolean;
+  message: string;
+  timestamp: string;
 }
 
 // Mock data fallback
@@ -249,44 +300,50 @@ const mockIndicators: IndicatorData[] = [
     bb_lower: 0.43,
     created_at: "2025-08-15 23:15:00.546506",
   },
-]
+];
 
 export const indicatorsApi = {
-  async getIndicators(filters: IndicatorsFilters = {}): Promise<ApiResponse<IndicatorData>> {
+  async getIndicators(
+    filters: IndicatorsFilters = {}
+  ): Promise<ApiResponse<IndicatorData>> {
     try {
-      const params = new URLSearchParams()
-      if (filters.symbol) params.append("symbol", filters.symbol)
-      if (filters.interval) params.append("interval", filters.interval)
-      if (filters.search) params.append("search", filters.search)
-      if (filters.page) params.append("page", filters.page.toString())
-      if (filters.limit) params.append("limit", filters.limit.toString())
-      if (filters.startDate) params.append("start_date", filters.startDate)
-      if (filters.endDate) params.append("end_date", filters.endDate)
+      const params = new URLSearchParams();
+      if (filters.symbol) params.append("symbol", filters.symbol);
+      if (filters.interval) params.append("interval", filters.interval);
+      if (filters.search) params.append("search", filters.search);
+      if (filters.page) params.append("page", filters.page.toString());
+      if (filters.limit) params.append("limit", filters.limit.toString());
+      if (filters.startDate) params.append("start_date", filters.startDate);
+      if (filters.endDate) params.append("end_date", filters.endDate);
 
-      const response = await api.get(`/indicators?${params.toString()}`)
-      return response.data
+      const response = await api.get(`/indicators?${params.toString()}`);
+      return response.data;
     } catch (error) {
-      console.warn("API call failed, using mock data:", error)
+      console.warn("API call failed, using mock data:", error);
 
       // Fallback to mock data with filtering
-      let filteredData = [...mockIndicators]
+      let filteredData = [...mockIndicators];
 
       if (filters.symbol && filters.symbol !== "all") {
-        filteredData = filteredData.filter((item) => item.symbol === filters.symbol)
+        filteredData = filteredData.filter(
+          (item) => item.symbol === filters.symbol
+        );
       }
 
       if (filters.search) {
         filteredData = filteredData.filter(
           (item) =>
             item.symbol.toLowerCase().includes(filters.search!.toLowerCase()) ||
-            item.interval_tf.toLowerCase().includes(filters.search!.toLowerCase()),
-        )
+            item.interval_tf
+              .toLowerCase()
+              .includes(filters.search!.toLowerCase())
+        );
       }
 
-      const page = filters.page || 1
-      const limit = filters.limit || 10
-      const startIndex = (page - 1) * limit
-      const paginatedData = filteredData.slice(startIndex, startIndex + limit)
+      const page = filters.page || 1;
+      const limit = filters.limit || 10;
+      const startIndex = (page - 1) * limit;
+      const paginatedData = filteredData.slice(startIndex, startIndex + limit);
 
       return {
         data: paginatedData,
@@ -294,26 +351,26 @@ export const indicatorsApi = {
         page,
         limit,
         totalPages: Math.ceil(filteredData.length / limit),
-      }
+      };
     }
   },
 
   async getSymbols(): Promise<string[]> {
     try {
-      const response = await api.get("/symbols")
-      return response.data
+      const response = await api.get("/symbols");
+      return response.data;
     } catch (error) {
-      console.warn("API call failed, using mock symbols:", error)
-      return [...new Set(mockIndicators.map((item) => item.symbol))]
+      console.warn("API call failed, using mock symbols:", error);
+      return [...new Set(mockIndicators.map((item) => item.symbol))];
     }
   },
 
   async getStats() {
     try {
-      const response = await api.get("/stats")
-      return response.data
+      const response = await api.get("/stats");
+      return response.data;
     } catch (error) {
-      console.warn("API call failed, using mock stats:", error)
+      console.warn("API call failed, using mock stats:", error);
       return {
         totalSymbols: 5,
         avgBtcPrice: 59900,
@@ -321,41 +378,87 @@ export const indicatorsApi = {
         activeSignals: 8,
         priceChange: -1.2,
         rsiChange: 3.1,
-      }
+      };
     }
   },
 
   async getPositions() {
     try {
-      const response = await api.get("/positions")
-      return response.data
+      const response = await api.get("/positions");
+      return response.data;
     } catch (error) {
-      console.warn("API call failed, using mock positions:", error)
+      console.warn("API call failed, using mock positions:", error);
       return {
         success: false,
         totalOpenPositions: 0,
         positions: {
           BTCUSDT: null,
           ETHUSDT: null,
-          BNBUSDT: null
+          BNBUSDT: null,
         },
         timestamp: new Date().toISOString(),
-        error: "API not available"
-      }
+        error: "API not available",
+      };
     }
   },
-}
-
+};
 
 export const getBybitPositions = async (): Promise<BybitPositionsResponse> => {
   try {
-    const response = await api.get("/positions")
-    return response.data
+    const response = await api.get("/positions");
+    return response.data;
   } catch (error) {
-    console.warn("Bybit API call failed, using mock data:", error)
-    return mockBybitData
+    console.warn("Bybit API call failed, using mock data:", error);
+    return mockBybitData;
   }
-}
+};
 
+// Trading Strategies API
+export const tradingStrategiesApi = {
+  async getActiveStrategies(): Promise<ActiveStrategiesResponse> {
+    try {
+      const response = await api.get("/trading-strategies/active");
+      // El backend devuelve un array directamente, necesitamos envolver en la estructura esperada
+      const strategies = Array.isArray(response.data) ? response.data : [];
+      return {
+        success: true,
+        strategies: strategies,
+        total: strategies.length,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("Failed to fetch active strategies:", error);
+      throw error;
+    }
+  },
 
-export default api
+  async executeStrategy(
+    request: ExecuteStrategyRequest
+  ): Promise<ExecuteStrategyResponse> {
+    try {
+      const response = await api.post("/trading-strategies/execute", {
+        strategy_id: request.strategy_id,
+        usdt_amount: request.usdt_amount,
+        token: request.token,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to execute strategy:", error);
+      throw error;
+    }
+  },
+
+  async expireStrategy(strategyId: string): Promise<ExpireStrategyResponse> {
+    try {
+      const response = await api.post("/expire-old", {
+        strategy_id: strategyId,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to expire strategy:", error);
+      throw error;
+    }
+  },
+};
+
+export default api;

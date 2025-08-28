@@ -2,6 +2,7 @@ from pybit.unified_trading import HTTP
 from config import BYBIT_API_KEY, BYBIT_API_SECRET,APP_ENV
 import os
 import logging
+import time
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -27,15 +28,176 @@ class BybitService:
         self.client = HTTP(
             api_key=api_key,
             api_secret=api_secret,
-            timeout=10,    # Timeout de 10 segundos
-            recv_window=5000,  # Ventana de recepción más amplia
+            timeout=15,    # Timeout aumentado a 15 segundos
+            recv_window=30000,  # Ventana de recepción ampliada para evitar errores de timestamp
             testnet=True if APP_ENV == 'development' else False  # Usar testnet en desarrollo
         )
+        
+        # Sincronizar tiempo con el servidor
+        self._sync_server_time()
         
         # Verificar que esté usando testnet
         print(f"🔗 Cliente configurado para: {'Testnet' if self.client.testnet else 'Mainnet'}")
         print(f"📡 Base URL: {getattr(self.client, 'endpoint', 'No disponible')}")
         print("✅ BybitService inicializado correctamente")
+
+    def _sync_server_time(self):
+        """
+        Sincroniza el tiempo local con el servidor de Bybit para evitar errores de timestamp
+        """
+        try:
+            print("⏰ Sincronizando tiempo con servidor Bybit...")
+            
+            # Obtener tiempo del servidor
+            server_time_response = self.client.get_server_time()
+            
+            if isinstance(server_time_response, dict) and server_time_response.get('retCode') == 0:
+                server_time_ms = int(server_time_response['result']['timeSecond']) * 1000
+                local_time_ms = int(time.time() * 1000)
+                
+                time_diff = server_time_ms - local_time_ms
+                
+                print(f"🕐 Tiempo servidor: {server_time_ms}")
+                print(f"🕐 Tiempo local: {local_time_ms}")
+                print(f"⏱️ Diferencia: {time_diff}ms")
+                
+                # Si la diferencia es mayor a 1 segundo, ajustar recv_window
+                if abs(time_diff) > 1000:
+                    new_recv_window = 30000 + abs(time_diff) + 5000  # Agregar buffer adicional
+                    print(f"⚠️ Gran diferencia de tiempo detectada. Ajustando recv_window a {new_recv_window}ms")
+                    
+                    # Recrear cliente con recv_window ajustado
+                    api_key = BYBIT_API_KEY or os.getenv('BYBIT_API_KEY')
+                    api_secret = BYBIT_API_SECRET or os.getenv('BYBIT_API_SECRET')
+                    
+                    self.client = HTTP(
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        timeout=15,
+                        recv_window=int(new_recv_window),
+                        testnet=True if APP_ENV == 'development' else False
+                    )
+                    
+                    print(f"✅ Cliente recreado con recv_window: {new_recv_window}ms")
+                else:
+                    print("✅ Sincronización de tiempo correcta")
+            else:
+                print(f"⚠️ No se pudo obtener tiempo del servidor: {server_time_response}")
+                
+        except Exception as e:
+            print(f"⚠️ Error sincronizando tiempo: {str(e)}")
+            print("🔄 Continuando con configuración por defecto...")
+
+    def _execute_with_retry(self, func, *args, max_retries=2, **kwargs):
+        """
+        Ejecuta una función de la API con reintentos automáticos y sincronización de tiempo
+        
+        Args:
+            func: Función de la API a ejecutar
+            *args: Argumentos posicionales para la función
+            max_retries: Número máximo de reintentos
+            **kwargs: Argumentos con nombre para la función
+            
+        Returns:
+            Resultado de la función de la API
+        """
+        last_exception = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                return func(*args, **kwargs)
+                
+            except Exception as e:
+                error_str = str(e)
+                last_exception = e
+                
+                # Verificar si es un error de timestamp o retries exceeded
+                is_timestamp_error = (
+                    "timestamp" in error_str.lower() or 
+                    "recv_window" in error_str.lower() or 
+                    "10002" in error_str or
+                    "retries exceeded maximum" in error_str.lower()
+                )
+                
+                if is_timestamp_error:
+                    if attempt < max_retries:
+                        print(f"⚠️ Error de timestamp/retries detectado (intento {attempt + 1}/{max_retries + 1}): {error_str[:100]}...")
+                        print("🔄 Resincronizando tiempo con servidor...")
+                        
+                        # Resincronizar tiempo y reconfigurar cliente
+                        self._sync_server_time()
+                        
+                        # Esperar un poco más antes del siguiente intento
+                        time.sleep(2)
+                        continue
+                    else:
+                        print(f"❌ Error de timestamp persistente después de {max_retries} reintentos")
+                        raise e
+                else:
+                    # Si no es un error de timestamp, no reintentar
+                    raise e
+        
+        # Si llegamos aquí, todos los reintentos fallaron
+        raise last_exception
+    
+    def _cancel_existing_orders(self, symbol: str, base_order_link_id: str):
+        """
+        Cancela órdenes existentes que coincidan con el patrón base del orderLinkId
+        para evitar errores de duplicados.
+        
+        Args:
+            symbol: Símbolo del par
+            base_order_link_id: Patrón base del orderLinkId (ej: STRATEGY_5_ETHUSDT_Sell)
+        """
+        try:
+            print(f"🔍 Verificando órdenes existentes para {base_order_link_id}...")
+            
+            # Obtener órdenes abiertas
+            open_orders_response = self._execute_with_retry(
+                self.client.get_open_orders,
+                category="linear",
+                symbol=symbol
+            )
+            
+            if isinstance(open_orders_response, dict) and open_orders_response.get('retCode') == 0:
+                orders = open_orders_response.get('result', {}).get('list', [])
+                
+                # Buscar órdenes que coincidan con el patrón base
+                orders_to_cancel = []
+                for order in orders:
+                    order_link_id = order.get('orderLinkId', '')
+                    if order_link_id.startswith(base_order_link_id):
+                        orders_to_cancel.append(order)
+                
+                # Cancelar órdenes encontradas
+                for order in orders_to_cancel:
+                    order_id = order.get('orderId')
+                    order_link_id = order.get('orderLinkId')
+                    print(f"🗑️ Cancelando orden existente: {order_link_id} (ID: {order_id})")
+                    
+                    try:
+                        cancel_response = self._execute_with_retry(
+                            self.client.cancel_order,
+                            category="linear",
+                            symbol=symbol,
+                            orderId=order_id
+                        )
+                        
+                        if isinstance(cancel_response, dict) and cancel_response.get('retCode') == 0:
+                            print(f"✅ Orden {order_link_id} cancelada exitosamente")
+                        else:
+                            print(f"⚠️ No se pudo cancelar orden {order_link_id}: {cancel_response.get('retMsg', 'Error desconocido')}")
+                    except Exception as e:
+                        print(f"⚠️ Error cancelando orden {order_link_id}: {str(e)}")
+                
+                if not orders_to_cancel:
+                    print(f"✅ No se encontraron órdenes existentes para {base_order_link_id}")
+            else:
+                print(f"⚠️ No se pudieron obtener órdenes abiertas: {open_orders_response.get('retMsg', 'Error desconocido')}")
+                
+        except Exception as e:
+            print(f"⚠️ Error verificando órdenes existentes: {str(e)}")
+            # No lanzar excepción aquí, solo registrar el error
 
     def test_connection(self):
         """
@@ -71,7 +233,8 @@ class BybitService:
         try:
             print(f"📊 Consultando posición para {symbol}...")
             
-            response = self.client.get_positions(
+            response = self._execute_with_retry(
+                self.client.get_positions,
                 category="linear",
                 symbol=symbol
             )
@@ -119,7 +282,8 @@ class BybitService:
         try:
             print("💰 Consultando balance de la cuenta UNIFIED para futuros...")
             
-            response = self.client.get_wallet_balance(
+            response = self._execute_with_retry(
+                self.client.get_wallet_balance,
                 accountType="UNIFIED",
                 coin="USDT"
             )
@@ -196,7 +360,8 @@ class BybitService:
             print(f"💹 Consultando precio para {symbol}...")
             
             # Llamada a la API de Bybit para obtener el precio
-            response = self.client.get_tickers(
+            response = self._execute_with_retry(
+                self.client.get_tickers,
                 category="linear",
                 symbol=symbol
             )
@@ -258,15 +423,46 @@ class BybitService:
             print(f"💰 Cantidad: ${usdt_amount} USDT, Average=${average_price}")
             
             # Calcular la cantidad en base al precio de entrada y cantidad en USDT
-            quantity = round(usdt_amount / entry_price, 6)
+            # Convertir a float para evitar problemas de tipos
+            entry_price_float = float(entry_price)
+            usdt_amount_float = float(usdt_amount)
+            
+            quantity = round(usdt_amount_float / entry_price_float, 6)
             print(f"📏 Cantidad calculada inicial: {quantity} {symbol.replace('USDT', '')}")
             
-            # Para futuros de BTCUSDT, la cantidad mínima es 0.001 BTC
-            min_quantity = 0.001
+            # Definir cantidades mínimas según el símbolo
+            min_quantities = {
+                'BTCUSDT': 0.001,  # BTC mínimo
+                'ETHUSDT': 0.01,   # ETH mínimo
+                'BNBUSDT': 0.01    # BNB mínimo (estimado)
+            }
+            
+            min_quantity = min_quantities.get(symbol, 0.001)  # Default 0.001
+            min_notional = 5.0  # Valor mínimo en USDT para todas las órdenes
+            
+            # Verificar cantidad mínima
             if quantity < min_quantity:
                 quantity = min_quantity
-                actual_usdt = quantity * entry_price
-                print(f"⚠️ Cantidad ajustada al mínimo: {quantity} BTC (${actual_usdt:.2f} USDT)")
+                actual_usdt = quantity * entry_price_float
+                print(f"⚠️ Cantidad ajustada al mínimo: {quantity} {symbol.replace('USDT', '')} (${actual_usdt:.2f} USDT)")
+            
+            # Verificar valor nocional mínimo
+            notional_value = quantity * entry_price_float
+            if notional_value < min_notional:
+                quantity = min_notional / entry_price_float
+                quantity = max(quantity, min_quantity)  # Asegurar que no sea menor al mínimo
+                actual_usdt = quantity * entry_price_float
+                print(f"⚠️ Cantidad ajustada por valor nocional mínimo: {quantity} {symbol.replace('USDT', '')} (${actual_usdt:.2f} USDT)")
+            
+            # Redondear según el qtyStep del símbolo
+            qty_steps = {
+                'BTCUSDT': 0.001,  # BTC step
+                'ETHUSDT': 0.01,   # ETH step
+                'BNBUSDT': 0.01    # BNB step (estimado)
+            }
+            
+            qty_step = qty_steps.get(symbol, 0.001)
+            quantity = round(quantity / qty_step) * qty_step
             
             print(f"📏 Cantidad final: {quantity} {symbol.replace('USDT', '')}")
             
@@ -277,8 +473,8 @@ class BybitService:
             if usdt_amount <= 0:
                 raise ValueError(f"La cantidad en USDT debe ser mayor a 0, recibido: {usdt_amount}")
             
-            if entry_price <= 0:
-                raise ValueError(f"El precio de entrada debe ser mayor a 0, recibido: {entry_price}")
+            if entry_price_float <= 0:
+                raise ValueError(f"El precio de entrada debe ser mayor a 0, recibido: {entry_price_float}")
             
             # Verificar balance disponible
             balance_info = self.get_available_balance()
@@ -287,19 +483,47 @@ class BybitService:
             if available_balance < usdt_amount:
                 raise ValueError(f"Balance insuficiente. Disponible: ${available_balance}, Requerido: ${usdt_amount}")
             
-            # Crear orden principal
-            print(f"📝 Creando orden {side} para {symbol}...")
+            # Generar ID único con timestamp para evitar duplicados
+            timestamp = int(time.time() * 1000)  # Timestamp en milisegundos
+            unique_order_id = f"{ticket}_{symbol}_{side}_{timestamp}"
             
-            order_response = self.client.place_order(
-                category="linear",
-                symbol=symbol,
-                side=side,
-                orderType="Limit",  # Orden límite para precio específico
-                qty=str(quantity),
-                price=str(entry_price),
-                timeInForce="GTC",  # Good Till Cancelled
-                orderLinkId=f"{ticket}_{symbol}_{side}",  # ID único para la orden
-                reduceOnly=False
+            # Cancelar órdenes existentes con el mismo patrón base para evitar duplicados
+            base_order_id = f"{ticket}_{symbol}_{side}"
+            self._cancel_existing_orders(symbol, base_order_id)
+            
+            # Crear orden principal con TP/SL integrados
+            print(f"📝 Creando orden {side} para {symbol} con TP/SL integrados...")
+            
+            # Preparar parámetros de la orden
+            order_params = {
+                "category": "linear",
+                "symbol": symbol,
+                "side": side,
+                "orderType": "Limit",
+                "qty": str(quantity),
+                "price": str(entry_price_float),
+                "timeInForce": "GTC",
+                "orderLinkId": unique_order_id,
+                "reduceOnly": False
+            }
+            
+            # Agregar Take Profit y Stop Loss si están definidos
+            if take_profit > 0 or stop_loss > 0:
+                order_params["tpslMode"] = "Full"  # Modo TP/SL requerido
+                
+            if take_profit > 0:
+                order_params["takeProfit"] = str(take_profit)
+                order_params["tpOrderType"] = "Market"  # Tipo de orden para TP (requerido con tpslMode Full)
+                print(f"🎯 Take Profit configurado: ${take_profit}")
+            
+            if stop_loss > 0:
+                order_params["stopLoss"] = str(stop_loss)
+                order_params["slOrderType"] = "Market"  # Tipo de orden para SL
+                print(f"🛑 Stop Loss configurado: ${stop_loss}")
+            
+            order_response = self._execute_with_retry(
+                self.client.place_order,
+                **order_params
             )
             
             print(f"📋 Respuesta orden principal: {order_response}")
@@ -312,22 +536,23 @@ class BybitService:
                 if order_id:
                     print(f"✅ Orden principal creada: {order_id}")
                     
-                    # Crear órdenes de Take Profit y Stop Loss
-                    tp_sl_result = self._create_tp_sl_orders(
-                        symbol=symbol,
-                        side=side,
-                        quantity=quantity,
-                        take_profit=take_profit,
-                        stop_loss=stop_loss,
-                        ticket=ticket
-                    )
+                    # Verificar si TP/SL fueron creados exitosamente
+                    tp_sl_result = {
+                        'take_profit': {'success': take_profit > 0, 'price': take_profit} if take_profit > 0 else {'success': False},
+                        'stop_loss': {'success': stop_loss > 0, 'price': stop_loss} if stop_loss > 0 else {'success': False}
+                    }
+                    
+                    if take_profit > 0:
+                        print(f"✅ Take Profit integrado en la orden: ${take_profit}")
+                    if stop_loss > 0:
+                        print(f"✅ Stop Loss integrado en la orden: ${stop_loss}")
                     
                     return {
                         'success': True,
                         'ticket': ticket,
                         'symbol': symbol,
                         'side': side,
-                        'entry_price': entry_price,
+                        'entry_price': entry_price_float,
                         'quantity': quantity,
                         'usdt_amount': usdt_amount,
                         'order_id': order_id,
@@ -335,7 +560,7 @@ class BybitService:
                         'stop_loss': stop_loss,
                         'average_price': average_price,
                         'tp_sl_orders': tp_sl_result,
-                        'message': f"Estrategia {ticket} ejecutada exitosamente"
+                        'message': f"Estrategia {ticket} ejecutada exitosamente con TP/SL integrados"
                     }
                 else:
                     raise Exception(f"No se pudo obtener el ID de la orden: {order_response}")
@@ -379,8 +604,17 @@ class BybitService:
             
             # Crear orden de Take Profit
             if take_profit > 0:
+                # Generar ID único con timestamp para TP
+                tp_timestamp = int(time.time() * 1000)
+                tp_order_id = f"{ticket}_{symbol}_TP_{tp_timestamp}"
+                
+                # Cancelar órdenes TP existentes
+                base_tp_id = f"{ticket}_{symbol}_TP"
+                self._cancel_existing_orders(symbol, base_tp_id)
+                
                 print(f"🎯 Creando Take Profit a ${take_profit}...")
-                tp_response = self.client.place_order(
+                tp_response = self._execute_with_retry(
+                    self.client.place_order,
                     category="linear",
                     symbol=symbol,
                     side=close_side,
@@ -388,8 +622,8 @@ class BybitService:
                     qty=str(quantity),
                     price=str(take_profit),
                     timeInForce="GTC",
-                    orderLinkId=f"{ticket}_{symbol}_TP",
-                    reduceOnly=True  # Solo para cerrar posición
+                    orderLinkId=tp_order_id,
+                    reduceOnly=False  # Cambiar a False para permitir la orden sin posición existente
                 )
                 
                 if isinstance(tp_response, dict) and tp_response.get('retCode') == 0:
@@ -408,17 +642,26 @@ class BybitService:
             
             # Crear orden de Stop Loss
             if stop_loss > 0:
+                # Generar ID único con timestamp para SL
+                sl_timestamp = int(time.time() * 1000)
+                sl_order_id = f"{ticket}_{symbol}_SL_{sl_timestamp}"
+                
+                # Cancelar órdenes SL existentes
+                base_sl_id = f"{ticket}_{symbol}_SL"
+                self._cancel_existing_orders(symbol, base_sl_id)
+                
                 print(f"🛑 Creando Stop Loss a ${stop_loss}...")
-                sl_response = self.client.place_order(
+                sl_response = self._execute_with_retry(
+                    self.client.place_order,
                     category="linear",
                     symbol=symbol,
                     side=close_side,
-                    orderType="Market",  # Stop Loss como orden de mercado
+                    orderType="StopMarket",  # Usar StopMarket para stop loss
                     qty=str(quantity),
                     stopLoss=str(stop_loss),
                     timeInForce="GTC",
-                    orderLinkId=f"{ticket}_{symbol}_SL",
-                    reduceOnly=True
+                    orderLinkId=sl_order_id,
+                    reduceOnly=False  # Cambiar a False para permitir la orden sin posición existente
                 )
                 
                 if isinstance(sl_response, dict) and sl_response.get('retCode') == 0:

@@ -808,14 +808,29 @@ async def websocket_positions(websocket: WebSocket, symbol: str):
         
         while True:
             try:
-                # Obtener posición actual
-                position = bybit_service.get_open_position(symbol)
+                # Ejecutar llamadas a Bybit en un thread pool para evitar bloquear el event loop
+                loop = asyncio.get_event_loop()
                 
-                # Obtener balance disponible
-                balance = bybit_service.get_available_balance()
+                # Obtener datos de forma asíncrona usando thread pool
+                position_task = loop.run_in_executor(None, bybit_service.get_open_position, symbol)
+                balance_task = loop.run_in_executor(None, bybit_service.get_available_balance)
+                price_task = loop.run_in_executor(None, bybit_service.get_price, symbol)
                 
-                # Obtener precio actual
-                current_price = bybit_service.get_price(symbol)
+                # Esperar a que todas las tareas se completen con timeout
+                try:
+                    position, balance, current_price = await asyncio.wait_for(
+                        asyncio.gather(position_task, balance_task, price_task),
+                        timeout=10.0  # Timeout de 10 segundos
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"⏰ Timeout obteniendo datos de Bybit para {symbol}")
+                    await websocket.send_text(json.dumps({
+                        "error": "Timeout obteniendo datos de Bybit",
+                        "symbol": symbol,
+                        "timestamp": datetime.now().isoformat()
+                    }))
+                    await asyncio.sleep(15)  # Esperar más tiempo después de timeout
+                    continue
                 
                 # Preparar datos para enviar
                 data = {
@@ -830,8 +845,8 @@ async def websocket_positions(websocket: WebSocket, symbol: str):
                 # Enviar datos al cliente
                 await websocket.send_text(json.dumps(data, default=str))
                 
-                # Esperar 5 segundos antes de la siguiente actualización
-                await asyncio.sleep(5)
+                # Esperar 10 segundos antes de la siguiente actualización
+                await asyncio.sleep(10)
                 
             except Exception as e:
                 logger.error(f"❌ Error obteniendo datos de Bybit: {e}")
