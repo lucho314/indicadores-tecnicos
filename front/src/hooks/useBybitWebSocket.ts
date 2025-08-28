@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useBalanceStore } from "../stores/useBalanceStore";
-const API_BASE_URL = "localhost:8000";
+const API_BASE_URL = "134.65.253.0:8000";
 export interface WebSocketPositionData {
   symbol: string;
   timestamp: string;
@@ -71,14 +71,16 @@ export const useBybitWebSocket = (symbol: string = "BTCUSDT") => {
           if (parsedData.balance) {
             // Mapear la estructura de datos del WebSocket a la estructura esperada por el store
             const balanceData = {
-              totalWalletBalance: parsedData.balance.walletBalance?.toString() || '0',
-              totalAvailableBalance: parsedData.balance.availableToWithdraw?.toString() || '0',
-              totalPerpUPL: parsedData.balance.unrealisedPnl?.toString() || '0',
-              totalUsedMargin: parsedData.balance.usedMargin?.toString() || '0',
-              totalOrderIM: parsedData.balance.orderIM?.toString() || '0',
-              totalPositionIM: parsedData.balance.positionIM?.toString() || '0',
-              totalPositionMM: parsedData.balance.positionMM?.toString() || '0',
-              coin: parsedData.balance.coin || 'USDT'
+              totalWalletBalance:
+                parsedData.balance.walletBalance?.toString() || "0",
+              totalAvailableBalance:
+                parsedData.balance.availableToWithdraw?.toString() || "0",
+              totalPerpUPL: parsedData.balance.unrealisedPnl?.toString() || "0",
+              totalUsedMargin: parsedData.balance.usedMargin?.toString() || "0",
+              totalOrderIM: parsedData.balance.orderIM?.toString() || "0",
+              totalPositionIM: parsedData.balance.positionIM?.toString() || "0",
+              totalPositionMM: parsedData.balance.positionMM?.toString() || "0",
+              coin: parsedData.balance.coin || "USDT",
             };
             setBalance(balanceData);
             setBalanceLoading(false);
