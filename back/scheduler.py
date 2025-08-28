@@ -35,7 +35,7 @@ class CryptoScheduler:
                 ['python', 'main.py', '--symbol', symbol, '--json'],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutos timeout
+                timeout=20  # 20 segundos timeout
             )
             
             execution_time = time.time() - start_time
