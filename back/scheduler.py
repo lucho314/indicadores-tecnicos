@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class CryptoScheduler:
     def __init__(self):
         self.db = PostgresIndicadorDB()
-        self.symbols = ['BTC/USD', 'ETH/USD', 'BNB/USD']
+        self.symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
         
     def run_analysis(self, symbol: str):
         """Ejecutar análisis para un símbolo específico"""
