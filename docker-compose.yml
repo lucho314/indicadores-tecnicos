@@ -1,16 +1,14 @@
 services:
   postgres:
     image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: indicadores_db
-      POSTGRES_USER: indicadores_user
-      POSTGRES_PASSWORD: indicadores_pass123
-      POSTGRES_HOST_AUTH_METHOD: trust
+    env_file:
+      - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./back/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
+    # 👇 si no querés exponer Postgres afuera, comentá esta línea:
+    # ports:
+    #   - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U indicadores_user -d indicadores_db"]
       interval: 10s
@@ -24,15 +22,7 @@ services:
       context: ./back
       dockerfile: Dockerfile
     env_file:
-       - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
-    environment:
-      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=indicadores_db
-      - DB_USER=indicadores_user
-      - DB_PASSWORD=indicadores_pass123
-      # Las keys sensibles vienen del env_file (no se exponen aquí)
+      - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
     volumes:
       - ./back/logs:/app/logs
     ports:
@@ -40,7 +30,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
     networks:
       - app-network
 
@@ -49,10 +50,7 @@ services:
       context: ./back
       dockerfile: Dockerfile
     env_file:
-       - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
-    environment:
-      - DATABASE_URL=postgresql://indicadores_user:indicadores_pass123@postgres:5432/indicadores_db
-      # El resto (OPENAI, TWELVEDATA, etc.) viene desde env_file
+      - ${ENV_FILE:-/etc/dokploy/env/indicadores-tecnicos.env}
     volumes:
       - ./back/logs:/app/logs
     depends_on:
@@ -67,13 +65,20 @@ services:
       context: ./front
       dockerfile: Dockerfile
       args:
-        # Usamos el valor del SO; si no está, fallback a la red interna (no localhost)
         VITE_API_URL: http://134.65.253.0:8000
-
     ports:
       - "8001:8001"
     depends_on:
       - api
+    networks:
+      - app-network
+
+  # 👇 Cliente web súper liviano
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080" # accedés en http://TU_VPS:8080
     networks:
       - app-network
 
