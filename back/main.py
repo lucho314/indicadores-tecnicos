@@ -320,7 +320,7 @@ def analyze_trading_signals(indicators: Dict[str, Any]) -> Dict[str, Any]:
     strength = min(strength, 10.0)
     
     # Determinar si se debe analizar (umbral de fuerza >= 3.0)
-    should_analyze = strength >= 3.0
+    should_analyze = strength >= 2.0
     
     return {
         "should_analyze": should_analyze,
@@ -660,7 +660,7 @@ def main(symbol: Optional[str] = None) -> Dict[str, Any]:
                 result["strategy_id"] = strategy_id
             
             # Enviar alerta por WhatsApp solo si hay señal fuerte o posición activa
-            if signal_active or has_position or signal_analysis["strength"] >= 7.0:
+            if signal_active or has_position or signal_analysis["strength"] >= 5.0:
                 print(f"[{timestamp}] Enviando alerta por WhatsApp...")
                 whatsapp_result = send_whatsapp_alert(llm_result, data.get("symbol", "N/A"))
                 
