@@ -30,7 +30,14 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 # ambiente 
 APP_ENV = os.getenv("APP_ENV", "development")
 
+# Telegram
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
 # Debug: verificar que las variables se carguen
 print(f"🔍 Config Debug - BYBIT_API_KEY: {'✅ Configurada' if BYBIT_API_KEY else '❌ No encontrada'}")
 print(f"🔍 Config Debug - BYBIT_API_SECRET: {'✅ Configurada' if BYBIT_API_SECRET else '❌ No encontrada'}")
+
+print(f"🔍 Config Debug - TELEGRAM_BOT_TOKEN: {'✅ Configurada' if TELEGRAM_BOT_TOKEN else '❌ No encontrada'}")
+print(f"🔍 Config Debug - TELEGRAM_CHAT_ID: {'✅ Configurada' if TELEGRAM_CHAT_ID else '❌ No encontrada'}")
 

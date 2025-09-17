@@ -2,6 +2,7 @@ import requests
 from typing import Dict, Any, Optional
 from urllib.parse import quote
 from config import CALLMEBOT_PHONE, CALLMEBOT_APIKEY
+from service.telegram import TelegramService
 
 class WhatsAppNotifier:
     def __init__(self):
@@ -116,13 +117,15 @@ def send_whatsapp_alert(llm_result: Dict[str, Any], symbol: str) -> Dict[str, An
         Dict con resultado del envío
     """
     try:
-        notifier = WhatsAppNotifier()
+        notifier = TelegramService()
         
-        # Formatear mensaje
-        message = notifier.format_trading_alert(llm_result, symbol)
+        # Formatear mensaje (usando la misma función de formato)
+        whatsapp_formatter = WhatsAppNotifier()
+        message = whatsapp_formatter.format_trading_alert(llm_result, symbol)
         
-        # Enviar alerta
-        result = notifier.send_alert(message)
+        # Enviar alerta por Telegram (usando el chat_id de configuración)
+        from config import TELEGRAM_CHAT_ID
+        result = notifier.send_message(TELEGRAM_CHAT_ID, message)
         
         # Agregar información adicional
         result["message_sent"] = message
